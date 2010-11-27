@@ -265,20 +265,36 @@
 %token <sval> T_ID
 %token <sval> T_WHITESPACE
 
-%type <attr> assign
-%type <attr> block
 %type <attr> begin_block
 %type <attr> end_block
-%type <attr> callout_arg
-%type <attr> callout_arg_comma_list
-%type <attr> constant
-%type <attr> expr
 %type <attr> int_id_comma_list
 %type <attr> bool_id_comma_list
+
+%type <attr> assign
+%type <attr> assign_comma_list
+%type <attr> block
+%type <attr> callout_arg
+%type <attr> callout_arg_comma_list
+%type <attr> class_name
+%type <attr> constant
+%type <attr> expr
+%type <attr> expr_comma_list
+%type <attr> field
+%type <attr> field_decl
+%type <attr> field_decl_list
+%type <attr> field_list
 %type <attr> lvalue
 %type <attr> method_call
+%type <attr> method_decl
+%type <attr> method_decl_list
+%type <attr> opt_expr
+%type <attr> param
+%type <attr> param_comma_list
+%type <attr> param_list
+%type <attr> program
 %type <attr> statement
 %type <attr> statement_list
+%type <attr> type
 %type <attr> var_decl
 %type <attr> var_decl_list
 
@@ -297,11 +313,24 @@
 
 %%
 
-start: block
+start: program
   {
-    cout << sem.final(*$1) << endl;
+    // cout << sem.final(*$1) << endl;
     // $1->printtree(0);
-    delete $1;
+    // delete $1;
+  }
+
+program: T_CLASS class_name T_LCB field_decl_list method_decl_list T_RCB
+  {
+    cout << "Reduce: program\n"; 
+  }
+     | T_CLASS class_name T_LCB field_decl_list T_RCB
+  {
+  }
+     ;
+
+class_name: T_ID
+  {
   }
 
 block: begin_block var_decl_list statement_list end_block
@@ -319,6 +348,84 @@ end_block: T_RCB
   {
     sem.remove_symtbl();
   }
+
+field_decl_list: field_decl_list field_decl
+  {
+  }
+     | /* empty */ 
+  {
+  }
+     ;
+
+field_decl: type field_list T_SEMICOLON
+    {
+    }
+     | type T_ID T_ASSIGN constant T_SEMICOLON
+    {
+    }
+     ;
+
+field_list: field T_COMMA field_list
+    {
+    }
+     | field
+    {
+    }
+     ;
+
+field: T_ID
+    {
+    }
+     | T_ID T_LSB T_INTCONSTANT T_RSB
+    {
+    }
+     ;
+
+method_decl_list: method_decl_list method_decl
+  {
+  }
+     | method_decl
+  {
+  }
+     ;
+
+
+method_decl: T_VOID T_ID T_LPAREN param_list T_RPAREN block
+    {
+    }
+     | type T_ID T_LPAREN param_list T_RPAREN block
+    {
+    }
+     ;
+
+param_list: param_comma_list
+  {
+  }
+     | /* empty */
+  {
+  }
+     ;
+
+param_comma_list: param T_COMMA param_comma_list
+  {
+  }
+     | param
+  {
+  }
+     ;
+
+param: type T_ID
+  {
+  }
+     ;
+
+type: T_INT
+  {
+  }
+     | T_BOOL
+  {
+  }
+     ;
 
 var_decl_list: var_decl var_decl_list
   {
@@ -385,6 +492,27 @@ statement: assign T_SEMICOLON
   {
     $$ = $1;
   }
+     | T_IF T_LPAREN expr T_RPAREN block T_ELSE block
+  {
+  }
+     | T_IF T_LPAREN expr T_RPAREN block 
+  {
+  }
+     | T_WHILE T_LPAREN expr T_RPAREN block
+  {
+  }
+     | T_FOR T_LPAREN assign_comma_list T_SEMICOLON expr T_SEMICOLON assign_comma_list T_RPAREN block
+  {
+  }
+     | T_RETURN opt_expr T_SEMICOLON
+  {
+  }
+     | T_BREAK T_SEMICOLON
+  {
+  }
+     | T_CONTINUE T_SEMICOLON
+  {
+  }
      ;
 
 assign: lvalue T_ASSIGN expr
@@ -392,9 +520,36 @@ assign: lvalue T_ASSIGN expr
     $$ = assign($1, $3);
   }
 
-method_call: T_CALLOUT T_LPAREN T_STRINGCONSTANT callout_arg_comma_list T_RPAREN
+method_call: T_ID T_LPAREN expr_comma_list T_RPAREN
+  {
+  
+  }
+           | T_CALLOUT T_LPAREN T_STRINGCONSTANT callout_arg_comma_list T_RPAREN
   {
     $$ = callout($3, $4);
+  };
+
+assign_comma_list: assign
+  {
+  }
+     | assign T_COMMA assign_comma_list
+  {
+  }
+     ;
+
+expr_comma_list: opt_expr
+  {
+  }
+     | expr T_COMMA expr_comma_list
+  {
+  }
+     ;
+
+opt_expr: expr
+  {
+  }
+     | /* empty */ 
+  {
   }
      ;
 
