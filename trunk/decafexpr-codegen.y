@@ -488,10 +488,6 @@ statement: assign T_SEMICOLON
   {
     $$ = $1;
   }
-     | block
-  {
-    $$ = $1;
-  }
      | T_IF T_LPAREN expr T_RPAREN block T_ELSE block
   {
   }
@@ -512,6 +508,10 @@ statement: assign T_SEMICOLON
   }
      | T_CONTINUE T_SEMICOLON
   {
+  }
+     | block
+  {
+    $$ = $1;
   }
      ;
 
