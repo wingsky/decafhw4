@@ -3,7 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#define _DEBUG_ON
+//#define _DEBUG_ON
 
 #ifdef _DEBUG_ON
 #define DEBUG(stmt) stmt;
@@ -14,6 +14,8 @@
   using namespace std;
 
   semantics sem;
+  code g_code;
+  
 
   attribute *constant(string *immvalue) {
     attribute *attr = new attribute;
@@ -26,6 +28,7 @@
     attr->remove_first_free_register();
     attr->mipsInstruction();
     DEBUG(attr->print("constant"));
+	g_code.add(attr->asmcode());
     return attr;
   }
 
@@ -40,6 +43,7 @@
       parent->add_child(*attr);
       parent->add_child(*attrlist);
       DEBUG(parent->print("combine"));
+	  g_code.add(parent->asmcode());
       return parent;
     }
   }
@@ -54,6 +58,7 @@
       parent->add_child(*arg);
       parent->add_child(*arg_list);
       DEBUG(parent->print("combine_args"));
+	  g_code.add(parent->asmcode());
       return parent;
     }
   }
@@ -65,6 +70,7 @@
     var_decl->opcode_type = "none";
     if (var_decl_list != NULL)
       var_decl->add_child(*var_decl_list);
+	g_code.add(var_decl->asmcode());
     return var_decl;
   }
 
@@ -92,6 +98,7 @@
     assign->add_child(*attr);
     assign->add_child(*expr);
     DEBUG(assign->print("assign"));
+	g_code.add(assign->asmcode());
     return assign;
   }
 
@@ -114,12 +121,14 @@
 
     syscall_setup->opcode_type = "imm";
     syscall_setup->opcode = "li";
+	g_code.add(syscall_setup->asmcode());
 
     attribute *callout = new attribute;
     callout->rdest = "$a0";
     callout->rsrc = attr->rdest;
     callout->opcode_type = "load";
     callout->opcode = "move";
+	g_code.add(callout->asmcode());
 
     attribute *syscall = new attribute;
     syscall->opcode_type = "none";
@@ -129,6 +138,7 @@
     syscall->add_child(*callout);
 
     DEBUG(syscall->print("callout"));
+	g_code.add(syscall->asmcode());
     return syscall;
   }
 
@@ -181,6 +191,7 @@
     expr->add_child(*left_expr);
     expr->add_child(*right_expr);
     DEBUG(expr->print("expr"));
+	g_code.add(expr->asmcode());
 
     return expr;
   }
@@ -203,6 +214,7 @@
     unary_expr->opcode = string(opcode);
     unary_expr->add_child(*attr);
     DEBUG(unary_expr->print("unary_expr"));
+	g_code.add(unary_expr->asmcode());
 
     return unary_expr;
   }
@@ -297,7 +309,6 @@
 %type <attr> type
 %type <attr> var_decl
 %type <attr> var_decl_list
-
 %type <attr> start
 
 %left T_OR
@@ -315,14 +326,16 @@
 
 start: program
   {
-    // cout << sem.final(*$1) << endl;
+	g_code.print();
+    //cout << sem.final(*$1) << endl;
     // $1->printtree(0);
-    // delete $1;
+     delete $1;
   }
 
 program: T_CLASS class_name T_LCB field_decl_list method_decl_list T_RCB
   {
-    cout << "Reduce: program\n"; 
+	$$ = $5;
+    //cout << "Reduce: program\n"; 
   }
      | T_CLASS class_name T_LCB field_decl_list T_RCB
   {
@@ -382,19 +395,23 @@ field: T_ID
      ;
 
 method_decl_list: method_decl_list method_decl
-  {
-  }
+	{
+		$$ = $2;
+	}
      | method_decl
-  {
-  }
+	{
+		$$ = $1;
+	}
      ;
 
 
 method_decl: T_VOID T_ID T_LPAREN param_list T_RPAREN block
     {
+		$$ = $6;
     }
      | type T_ID T_LPAREN param_list T_RPAREN block
     {
+		$$ = $6;
     }
      ;
 
@@ -449,11 +466,13 @@ statement_list: statement statement_list
 
 var_decl: T_INT T_ID int_id_comma_list T_SEMICOLON
   {
+	// TODO: NO TYPE CHEKCING!!!!!!!!!!!!!!!!!
     sem.enter_symtbl(*$2, *$1, "", "");
     $$ = var_decl($2, $3);
   }
      | T_BOOL T_ID bool_id_comma_list T_SEMICOLON
   {
+	// TODO: NO TYEP CHECKING!!!!!!!!!!!!!!!!!
     sem.enter_symtbl(*$2, *$1, "", "");
     $$ = var_decl($2, $3);
   }

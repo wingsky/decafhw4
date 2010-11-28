@@ -140,11 +140,13 @@ public:
   }
 
   string asmcode() {
-    string s;
-    mipsInstruction();
-    for (list<attribute>::iterator i = children.begin(); i != children.end(); ++i)
-      s += (*i).asmcode();
-    return s + mipsCode;
+    //string s;
+    //mipsInstruction();
+    //for (list<attribute>::iterator i = children.begin(); i != children.end(); ++i)
+    //  s += (*i).asmcode();
+    //return s + mipsCode;
+	mipsInstruction();
+	return mipsCode;
   }
 
   void print(const char* s) { 

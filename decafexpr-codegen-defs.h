@@ -6,6 +6,7 @@
 #include "descriptor.cc"
 #include "attribute.cc"
 #include "semantics.cc"
+#include "code.cc"
 
 using namespace std;
 
