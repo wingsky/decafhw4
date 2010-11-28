@@ -37,6 +37,10 @@ public:
 
   list<attribute> children;
   list<string> next_free_register;
+  
+  list<int> true_list;
+  list<int> false_list;
+  list<int> next_list;
 
   int inherited; // non-zero means this attribute is inherited
 
@@ -148,6 +152,23 @@ public:
 	mipsInstruction();
 	return mipsCode;
   }
+
+  void print_list(const string& s){
+	if(s == "true")
+		print_list(true_list);
+	else if(s == "false")
+		print_list(false_list);
+	else if(s == "next")
+		print_list(next_list);
+
+  }
+
+   void print_list(list<int>& l){
+	for(list<int>::iterator i = l.begin(); i != l.end(); ++i){
+		cout << *i << endl;
+	}
+  }
+
 
   void print(const char* s) { 
     cerr << endl;

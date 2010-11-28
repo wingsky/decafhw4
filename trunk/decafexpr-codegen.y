@@ -13,6 +13,7 @@
 
   using namespace std;
 
+
   semantics sem;
   code g_code;
   
@@ -72,6 +73,16 @@
       var_decl->add_child(*var_decl_list);
 	g_code.add(var_decl->asmcode());
     return var_decl;
+  }
+
+  attribute *if_else(attribute *expr, attribute *block){
+	attribute *if_else = new attribute;
+	if_else->token = string("if_else");
+	if_else->opcode_type = "none";
+	if_else->add_child(*expr);
+	if_else->add_child(*block);
+
+	return if_else;
   }
 
   attribute *assign(attribute *attr, attribute *expr) {
@@ -160,6 +171,9 @@
     attribute *lvalue = new attribute;
     lvalue->opcode_type = "none";
     lvalue->rdest = reg;
+	lvalue->true_list = token->true_list;
+	lvalue->false_list = token->false_list;
+	lvalue->next_list = token->next_list;
     lvalue->add_child(*token);
     DEBUG(lvalue->print("lvalue_expr"));
     return lvalue;
@@ -218,12 +232,27 @@
 
     return unary_expr;
   }
+  
+  list<int> merge_list(list<int>& l, list<int>& r){
+    list<int> new_list = l;
+	l.merge(r);
 
+	return r;
+  }
+
+  string int_to_str(int i){
+	stringstream out;
+	out << i;
+	return out.str();
+  }
+
+ 
 %}
 
 %union {
   string *sval;
   attribute *attr;
+  int ival;
 }
 
 %token <sval> T_AND
@@ -311,6 +340,8 @@
 %type <attr> var_decl_list
 %type <attr> start
 
+%type <ival> m
+
 %left T_OR
 %left T_AND
 %left T_EQ T_NEQ
@@ -350,6 +381,7 @@ block: begin_block var_decl_list statement_list end_block
   {
     delete $2;
     $$ = $3;
+	$$->next_list = $3->next_list;
   }
 
 begin_block: T_LCB
@@ -454,9 +486,14 @@ var_decl_list: var_decl var_decl_list
   }
      ;
 
-statement_list: statement statement_list
+statement_list: statement m statement_list
   {
-    $$ = combine($1, $2);
+    $$ = combine($1, $3);
+
+	g_code.backpatch($1->next_list, $2);
+	if($3 != NULL){
+		$$->next_list = $3->next_list;
+	}
   }
      | /* empty */ 
   {
@@ -507,11 +544,15 @@ statement: assign T_SEMICOLON
   {
     $$ = $1;
   }
-     | T_IF T_LPAREN expr T_RPAREN block T_ELSE block
+     | T_IF T_LPAREN expr T_RPAREN m block n T_ELSE m block
   {
   }
-     | T_IF T_LPAREN expr T_RPAREN block 
+     | T_IF T_LPAREN expr T_RPAREN m block 
   {
+    $$ = if_else($3, $6);
+	
+	g_code.backpatch($3->true_list, $5);
+	$$->next_list = merge_list($3->false_list, $6->next_list);
   }
      | T_WHILE T_LPAREN expr T_RPAREN block
   {
@@ -682,9 +723,13 @@ expr: lvalue
   {
     $$ = binop_expr("and", $1, $3);
   }
-     | expr T_OR expr
+     | expr T_OR m expr
   {
-    $$ = binop_expr("or", $1, $3);
+    $$ = binop_expr("or", $1, $4);
+
+	g_code.backpatch($1->false_list, $3);
+	$$->true_list = merge_list($1->true_list, $4->true_list);
+	$$->false_list = $4->false_list;
   }
      | T_MINUS expr %prec UMINUS 
   {
@@ -703,6 +748,10 @@ expr: lvalue
   }
      ;
 
+m: { $$ = g_code.get_next_instr(); }
+
+n: {}
+
 constant: T_INTCONSTANT
   {
     $$ = constant($1);
@@ -715,11 +764,17 @@ constant: T_INTCONSTANT
   {
     string trueval("1");
     $$ = constant(&trueval);
+
+	$$->true_list = list<int> (1, g_code.get_next_instr());
+	g_code.add(string(s_pad) + string("goto _") + string(s_newline));
   }
      | T_FALSE
   {
     string falseval("0");
     $$ = constant(&falseval);
+	
+	$$->false_list = list<int> (1, g_code.get_next_instr());
+	g_code.add(string(s_pad) + string("goto _") + string(s_newline));
   }
      ;
 
