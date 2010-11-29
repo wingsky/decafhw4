@@ -30,7 +30,6 @@ public:
 
 	void print(){
 		string s;
-		s += string(".text\n") + string(".globl main\n");
 		for(vector<string>::iterator i = code_list.begin(); i != code_list.end(); ++i){
 			s += *i;
 		}
