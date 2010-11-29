@@ -41,7 +41,7 @@ public:
     symtbl.pop_front();
   }
 
-  void enter_symtbl(string ident, string type, string rdest, string memoryaddr) {
+  void enter_symtbl(string ident, string type, int rdest, string memoryaddr) {
     symbol_table* tbl;
     symbol_table::iterator find_ident;
 

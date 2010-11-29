@@ -7,6 +7,7 @@
 #include <iterator>
 #include <algorithm>
 #include <stdexcept>
+#include "reg.cc"
 
 using namespace std;
 
@@ -16,28 +17,33 @@ static const string s_newline = "\n";
 static const string mips_registers = "$t0 $t1 $t2 $t3 $t4 $t5 $t6 $t7 $t8 $t9";
 static const string symbol_registers = "$s0 $s1 $s2 $s3 $s4 $s5 $s6 $s7";
 
+
 class attribute {
 
 public:
 
   string token;
   string lexeme;
+  string array_size;
+  int array_index;
 
   string opcode_type; // is it an immediate load, or register load, etc.
   string opcode;      // MIPS opcode
-  string rdest;       // destination register
-  string rsrc;        // source register
+  int rdest;       // destination register
+  int rsrc;        // source register
+  int rsrc2;
   string rt;          // temporary register
   string imm;         // immediate value
   string label;       // label for goto
   string address;     // memory address
   string function_label; // label for function calls: jal, etc.
-
+  
   string mipsCode;     // MIPS code for current attribute
 
   list<attribute> children;
-  list<string> next_free_register;
   
+  list<string> next_free_register;
+
   list<int> true_list;
   list<int> false_list;
   list<int> next_list;
@@ -48,11 +54,14 @@ public:
   attribute() {
     token   = "";
     lexeme  = "";
+    array_size = "";
+    array_index = -1;
  
     opcode_type = "";
     opcode  = "";
-    rdest   = "";
-    rsrc    = "";
+    rdest   = -1;
+    rsrc    = -1;
+    rsrc2   = -1;
     rt      = "";
     imm     = "";
     label   = "";
@@ -61,9 +70,8 @@ public:
     mipsCode = "";
 
     inherited = 0;
-    init_free_registers();
   }
-
+/*
   void init_free_registers() {
     istringstream sin(mips_registers);
     copy(istream_iterator<string>(sin), istream_iterator<string>(), 
@@ -104,7 +112,7 @@ public:
       remove_first_free_register();
     }
   }
-
+*/
   void add_child(attribute child) {
     children.push_back(child);
   }
@@ -122,17 +130,17 @@ public:
 
  // immediate move into register
   void mipsInstruction_imm() {
-    mipsCode = s_pad + opcode + s_pad + rdest + s_comma + imm + s_newline;
+    mipsCode = s_pad + opcode + s_pad + string(REGISTER[rdest]) + s_comma + imm + s_newline;
   }
 
   // opcode with 3 arguments, reuses one register so only uses a total of two registers
   void mipsInstruction_reuse() {
-    mipsCode = s_pad + opcode + s_pad + rdest + s_comma + rdest + s_comma + rsrc + s_newline;
+    mipsCode = s_pad + opcode + s_pad + string(REGISTER[rdest]) + s_comma + string(REGISTER[rsrc]) + s_comma + string(REGISTER[rsrc2]) + s_newline;
   }
 
   // load from one register to another
   void mipsInstruction_load() {
-    mipsCode = s_pad + opcode + s_pad + rdest + s_comma + rsrc + s_newline;
+    mipsCode = s_pad + opcode + s_pad + string(REGISTER[rdest]) + s_comma + string(REGISTER[rsrc]) + s_newline;
   }
 
   // do nothing
@@ -144,9 +152,7 @@ public:
   }
 
   string asmcode() {
-    //string s;
-    //mipsInstruction();
-    //for (list<attribute>::iterator i = children.begin(); i != children.end(); ++i)
+    //string s; //mipsInstruction(); //for (list<attribute>::iterator i = children.begin(); i != children.end(); ++i)
     //  s += (*i).asmcode();
     //return s + mipsCode;
 	mipsInstruction();
@@ -182,7 +188,6 @@ public:
     cerr << s << ": rt: " << rt << endl;
     cerr << s << ": imm: " << imm << endl;
     cerr << s << ": label: " << label << endl;
-    cerr << s << ": first_free_register: " << first_free_register() << endl;
     cerr << s << ": asmcode: " << endl;
     cerr << asmcode();
   }

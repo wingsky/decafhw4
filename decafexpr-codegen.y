@@ -25,8 +25,7 @@
     attr->imm = *immvalue;
     attr->opcode_type = "imm";
     attr->opcode = "li";
-    attr->rdest = attr->first_free_register();
-    attr->remove_first_free_register();
+    attr->rdest = reg::get_temp_reg(-1, -1);
     attr->mipsInstruction();
     DEBUG(attr->print("constant"));
 	g_code.add(attr->asmcode());
@@ -64,6 +63,26 @@
     }
   }
 
+  attribute *field(string *attr) {
+    attribute *field = new attribute;
+    
+    field->token = string("field");
+    field->lexeme = *attr;
+    field->opcode_type = "none";
+    return field;
+  }
+
+  attribute *field_decl(string lexeme, attribute *field_decl_list) {
+    attribute *field_decl = new attribute;
+    field_decl->token = string("field_decl");
+    field_decl->lexeme = lexeme;
+    field_decl->opcode_type = "none";
+    if (field_decl_list != NULL)
+      field_decl->add_child(*field_decl_list);
+    g_code.add(field_decl->asmcode());
+    return field_decl;
+  }
+
   attribute *var_decl(string *attr, attribute *var_decl_list) {
     attribute *var_decl = new attribute;
     var_decl->token = string("var_decl");
@@ -87,14 +106,13 @@
 
   attribute *assign(attribute *attr, attribute *expr) {
     descriptor *d = sem.access_symtbl(attr->lexeme);
-    string reg;
+    int reg;
     if (d != NULL) {
-      if ((d->rdest == "") || (d->rdest.empty())) {
-	reg = sem.first_symbol_register();
-	sem.remove_first_symbol_register();
-	d->rdest = reg;
+      if ((d->rdest == -1)) {
+        reg = reg::get_empty_reg();
+        d->rdest = reg;
       } else {
-	reg = d->rdest;
+        reg = d->rdest;
       }
     } else {
       cerr << "variable " << attr->lexeme << " used before it was defined" << endl;
@@ -109,13 +127,18 @@
     assign->add_child(*attr);
     assign->add_child(*expr);
     DEBUG(assign->print("assign"));
-	g_code.add(assign->asmcode());
+    g_code.add("move " + string(REGISTER[assign->rdest]) + ", " + string(REGISTER[expr->rdest]) + "\n");
+
+    if (attr->rdest != expr->rdest) {
+      reg::free_temp_reg(expr->rdest);
+    }
+
     return assign;
   }
 
   attribute *callout(string *callout_fn, attribute *attr) {
     attribute *syscall_setup = new attribute;
-    syscall_setup->rdest = "$v0";
+    syscall_setup->rdest = V0;
     syscall_setup->imm = "_ERROR_";
 
     if (*callout_fn == "\"print_int\"")
@@ -132,14 +155,16 @@
 
     syscall_setup->opcode_type = "imm";
     syscall_setup->opcode = "li";
-	g_code.add(syscall_setup->asmcode());
+    g_code.add(syscall_setup->asmcode());
 
     attribute *callout = new attribute;
-    callout->rdest = "$a0";
+    callout->rdest = A0;
     callout->rsrc = attr->rdest;
+    //cout << "CALLOUT RDEST: " << attr->lexeme << attr->rdest << endl;
+    //cout << "CALLOUT RSRC: " << attr->lexeme << attr->rsrc << endl; 
     callout->opcode_type = "load";
     callout->opcode = "move";
-	g_code.add(callout->asmcode());
+    g_code.add(callout->asmcode());
 
     attribute *syscall = new attribute;
     syscall->opcode_type = "none";
@@ -149,40 +174,61 @@
     syscall->add_child(*callout);
 
     DEBUG(syscall->print("callout"));
-	g_code.add(syscall->asmcode());
+    g_code.add(syscall->asmcode());
     return syscall;
   }
 
   attribute *expr_lvalue(attribute *token) {
     descriptor *d = sem.access_symtbl(token->lexeme);
-    string reg;
-    if (d != NULL) {
-      if ((d->rdest == "") || (d->rdest.empty())) {
-        cerr << "variable " << token->lexeme << " used before a value was assigned" << endl;
-        throw runtime_error("variable not in symbol table");
-      } else {
-	reg = d->rdest;
-      }
-    } else {
-      cerr << "variable " << token->lexeme << " used before it was defined" << endl;
-      throw runtime_error("variable not in symbol table");
-    }
+    int reg;
+    
+    //cout << "expr_lvalue: " << token->lexeme << token->array_index << endl;
+    //cout << "register: " << d->rdest << endl;
 
     attribute *lvalue = new attribute;
-    lvalue->opcode_type = "none";
-    lvalue->rdest = reg;
-	lvalue->true_list = token->true_list;
-	lvalue->false_list = token->false_list;
-	lvalue->next_list = token->next_list;
-    lvalue->add_child(*token);
-    DEBUG(lvalue->print("lvalue_expr"));
+    // If the lvalue is not an array entry
+    if (token->array_index == -1) {
+      if (d != NULL) {
+        if ((d->rdest == -1)) {
+          //cerr << "variable " << token->lexeme << " used before a value was assigned" << endl;
+          //throw runtime_error("variable not in symbol table");
+          d->rdest = reg::get_empty_reg();
+          reg = d->rdest;
+          g_code.add("lw " + string(REGISTER[d->rdest]) + ", " + d->memoryaddr + "\n");
+        } else {
+          reg = d->rdest;
+        }
+      } else {
+        cerr << "variable " << token->lexeme << " used before it was defined" << endl;
+        throw runtime_error("variable not in symbol table");
+      }
+
+      lvalue->opcode_type = "none";
+      lvalue->rdest = reg;
+      lvalue->true_list = token->true_list;
+      lvalue->false_list = token->false_list;
+      lvalue->next_list = token->next_list;
+      lvalue->add_child(*token);
+      DEBUG(lvalue->print("lvalue_expr"));
+    }
+    // Else the lvalue is an array entry
+    else {
+      reg = reg::get_temp_reg(-1, -1);
+      int offset = token->array_index;
+      g_code.add("mul " + string(REGISTER[offset]) + ", " + string(REGISTER[offset]) + ", 4\n");
+      g_code.add("lw " + string(REGISTER[reg]) + ", " + token->lexeme + " + 0(" + string(REGISTER[offset]) + ")\n");
+      reg::free_temp_reg(offset);
+      lvalue->opcode_type = "none";
+      lvalue->rdest = reg;
+
+    }
     return lvalue;
   }
 
   attribute *binop_expr(const char *opcode, attribute *left_expr, attribute *right_expr) {
     attribute *expr = new attribute;
     expr->opcode_type = "reuse";
-
+/*
     if ((left_expr->rdest == "") || (left_expr->opcode_type != "none")) {
       string left_register = expr->first_free_register();
       expr->remove_first_free_register();
@@ -194,9 +240,10 @@
       expr->remove_first_free_register();
       right_expr->result_register(right_register);
     }
-
-    expr->rdest = left_expr->rdest;
-    expr->rsrc = right_expr->rdest;
+*/
+    expr->rdest = reg::get_temp_reg(left_expr->rdest, right_expr->rdest);
+    expr->rsrc = left_expr->rdest;
+    expr->rsrc2 = right_expr->rdest;
     expr->opcode = string(opcode);
 
     DEBUG(cerr << "left_expr: " << left_expr->asmcode());
@@ -205,30 +252,39 @@
     expr->add_child(*left_expr);
     expr->add_child(*right_expr);
     DEBUG(expr->print("expr"));
-	g_code.add(expr->asmcode());
+    g_code.add(expr->asmcode());
+
+    if (left_expr->rdest != expr->rdest) {
+      reg::free_temp_reg(left_expr->rdest);
+    }
+    if (right_expr->rdest != expr->rdest) {
+      reg::free_temp_reg(right_expr->rdest);
+    }
 
     return expr;
   }
 
   attribute *unary_expr(const char *opcode, attribute *attr) {
     attribute *unary_expr = new attribute;
-    string rdest = unary_expr->first_free_register();
-    unary_expr->remove_first_free_register();
-
-    if (attr->rdest == "") {
+/*
+    if (attr->rdest == -1) {
       string attr_reg = unary_expr->first_free_register();
       unary_expr->remove_first_free_register();
       attr->result_register(attr_reg);
     }
-
-    unary_expr->rdest = rdest;
+*/
+    unary_expr->rdest = reg::get_temp_reg(attr->rdest, attr->rdest);
     unary_expr->rsrc = attr->rdest;
 
     unary_expr->opcode_type = "load";
     unary_expr->opcode = string(opcode);
     unary_expr->add_child(*attr);
     DEBUG(unary_expr->print("unary_expr"));
-	g_code.add(unary_expr->asmcode());
+    g_code.add(unary_expr->asmcode());
+
+    if (attr->rdest != unary_expr->rdest) {
+      reg::free_temp_reg(unary_expr->rdest);
+    }
 
     return unary_expr;
   }
@@ -241,9 +297,9 @@
   }
 
   string int_to_str(int i){
-	stringstream out;
-	out << i;
-	return out.str();
+    stringstream out;
+    out << i;
+    return out.str();
   }
 
  
@@ -311,6 +367,9 @@
 %type <attr> int_id_comma_list
 %type <attr> bool_id_comma_list
 
+%type <attr> int_field_comma_list
+%type <attr> bool_field_comma_list
+
 %type <attr> assign
 %type <attr> assign_comma_list
 %type <attr> block
@@ -323,7 +382,6 @@
 %type <attr> field
 %type <attr> field_decl
 %type <attr> field_decl_list
-%type <attr> field_list
 %type <attr> lvalue
 %type <attr> method_call
 %type <attr> method_decl
@@ -363,12 +421,12 @@ start: program
      delete $1;
   }
 
-program: T_CLASS class_name T_LCB field_decl_list method_decl_list T_RCB
+program: T_CLASS class_name begin_block field_decl_list method_decl_list end_block
   {
 	$$ = $5;
     //cout << "Reduce: program\n"; 
   }
-     | T_CLASS class_name T_LCB field_decl_list T_RCB
+     | T_CLASS class_name begin_block field_decl_list end_block
   {
   }
      ;
@@ -396,39 +454,108 @@ end_block: T_RCB
 
 field_decl_list: field_decl_list field_decl
   {
+    //$$ = combine($2, $1);
   }
      | /* empty */ 
   {
+    //$$ = NULL;
   }
      ;
 
-field_decl: type field_list T_SEMICOLON
+field_decl: T_INT field int_field_comma_list T_SEMICOLON
     {
+      sem.enter_symtbl($2->lexeme, *$1, -1, $2->lexeme);
+      sem.access_symtbl($2->lexeme)->global = 1;
+      // Address of the global variable is its name
+      //$$ = field_decl($2->lexeme, $3);
+      g_code.add(".globl " + $2->lexeme + "\n");
+      if ($2->array_size == "") {
+        g_code.add($2->lexeme + ": .word 0\n");
+      }
+      else {
+        //cout << "It's an array" << $2->array_size << endl;
+        g_code.add($2->lexeme + ": .space " + $2->array_size + "\n");
+        sem.access_symtbl($2->lexeme)->array_length = atoi($2->array_size.c_str());
+        //cout << "Array added to symtbl\n";
+      }
     }
-     | type T_ID T_ASSIGN constant T_SEMICOLON
+     | T_BOOL field bool_field_comma_list T_SEMICOLON
     {
+      sem.enter_symtbl($2->lexeme, *$1, -1, $2->lexeme);
+      sem.access_symtbl($2->lexeme)->global = 1;
+      // Address of the global variable is its name
+      //$$ = field_decl($2->lexeme, $3);
+      g_code.add(".globl " + $2->lexeme + "\n");
+      if ($2->array_size == "") {
+        g_code.add($2->lexeme + ": .word 0\n");
+      }
+      else {
+        g_code.add($2->lexeme + ": .space " + $2->array_size + "\n");
+        sem.access_symtbl($2->lexeme)->array_length = atoi($2->array_size.c_str());
+      }
+    }
+     | T_INT T_ID T_ASSIGN constant T_SEMICOLON
+    {
+      sem.enter_symtbl(*$2, *$1, -1, *$2);
+      sem.access_symtbl(*$2)->global = 1;
+      // Address of the global variable is its name
+      g_code.add(".globl " + *$2 + "\n");
+      g_code.add(*$2 + ": .word " + $4->lexeme + "\n");
+    }
+     | T_BOOL T_ID T_ASSIGN constant T_SEMICOLON
+    {
+      sem.enter_symtbl(*$2, *$1, -1, *$2);
+      sem.access_symtbl(*$2)->global = 1;
+      // Address of the global variable is its name
+      g_code.add(".globl " + *$2 + "\n");
+      g_code.add(*$2 + ": .word " + $4->lexeme + "\n");
     }
      ;
 
-field_list: field T_COMMA field_list
+int_field_comma_list: T_COMMA field int_field_comma_list
     {
+      sem.enter_symtbl($2->lexeme, string("int"), -1, $2->lexeme);
+      sem.access_symtbl($2->lexeme)->global = 1;
+      // Address of the global variable is its name
+      //$$ = field_decl($2->lexeme, $3);
+      g_code.add(".globl " + $2->lexeme + "\n");
+      g_code.add($2->lexeme + ": .word 0\n");
     }
-     | field
+     | 
     {
+      //$$ = NULL;
+    }
+     ;
+
+bool_field_comma_list: T_COMMA field bool_field_comma_list
+    {
+      sem.enter_symtbl($2->lexeme, string("bool"), -1, $2->lexeme);
+      sem.access_symtbl($2->lexeme)->global = 1;
+      // Address of the global variable is its name
+      //$$ = field_decl($2->lexeme, $3);
+      g_code.add(".globl " + $2->lexeme + "\n");
+      g_code.add($2->lexeme + ": .word 0\n");
+    }
+     | 
+    {
+      //$$ = NULL;
     }
      ;
 
 field: T_ID
     {
+      $$ = field($1);
     }
      | T_ID T_LSB T_INTCONSTANT T_RSB
     {
+      $$ = field($1);
+      $$->array_size = int_to_str(atoi($3->c_str()) * 4);
     }
      ;
 
 method_decl_list: method_decl_list method_decl
 	{
-		$$ = $2;
+		$$ = combine($2, $1);
 	}
      | method_decl
 	{
@@ -437,16 +564,31 @@ method_decl_list: method_decl_list method_decl
      ;
 
 
-method_decl: T_VOID T_ID T_LPAREN param_list T_RPAREN block
+method_decl: T_VOID T_ID 
     {
-		$$ = $6;
+      g_code.add(*$2 + ":\n");
     }
-     | type T_ID T_LPAREN param_list T_RPAREN block
+      T_LPAREN param_list T_RPAREN block
     {
-		$$ = $6;
+	  	$$ = $7;
+    }
+     | T_INT T_ID
+    {
+      g_code.add(*$2 + ":\n");
+    }
+      T_LPAREN param_list T_RPAREN block
+    {
+      $$ = $7;
+    }
+     | T_BOOL T_ID 
+    {
+      g_code.add(*$2 + ":\n");
+    }
+      T_LPAREN param_list T_RPAREN block
+    {
+		  $$ = $7;
     }
      ;
-
 param_list: param_comma_list
   {
   }
@@ -504,13 +646,13 @@ statement_list: statement m statement_list
 var_decl: T_INT T_ID int_id_comma_list T_SEMICOLON
   {
 	// TODO: NO TYPE CHEKCING!!!!!!!!!!!!!!!!!
-    sem.enter_symtbl(*$2, *$1, "", "");
+    sem.enter_symtbl(*$2, *$1, -1, "");
     $$ = var_decl($2, $3);
   }
      | T_BOOL T_ID bool_id_comma_list T_SEMICOLON
   {
 	// TODO: NO TYEP CHECKING!!!!!!!!!!!!!!!!!
-    sem.enter_symtbl(*$2, *$1, "", "");
+    sem.enter_symtbl(*$2, *$1, -1, "");
     $$ = var_decl($2, $3);
   }
 
@@ -520,7 +662,7 @@ int_id_comma_list: /* empty */
   }
      | T_COMMA T_ID int_id_comma_list
   {
-    sem.enter_symtbl(*$2, string("int"), "", "");
+    sem.enter_symtbl(*$2, string("int"), -1, "");
     $$ = var_decl($2, $3);
   }
      ;
@@ -531,7 +673,7 @@ bool_id_comma_list: /* empty */
   }
      | T_COMMA T_ID bool_id_comma_list
   {
-    sem.enter_symtbl(*$2, string("bool"), "", "");
+    sem.enter_symtbl(*$2, string("bool"), -1, "");
     $$ = var_decl($2, $3);
   }
      ;
@@ -577,7 +719,22 @@ statement: assign T_SEMICOLON
 
 assign: lvalue T_ASSIGN expr
   {
-    $$ = assign($1, $3);
+    //cout << "In Assign\n";
+    if ($1->array_index == -1) {
+      $$ = assign($1, $3);
+    }
+    else {
+    //cout << "about to add SW\n";
+    //cout << $3->rdest << endl;
+    //cout << $1->lexeme << endl;
+    //cout << $1->array_index << endl;
+    //cout << "sw " + $3->rdest + ", " + $1->lexeme + " + 0(" + $1->array_index + ")"; 
+    //cout << "added SW\n";
+      g_code.add("mul " + string(REGISTER[$1->array_index]) + ", " + string(REGISTER[$1->array_index]) + ", 4\n");
+      g_code.add("sw " + string(REGISTER[$3->rdest]) + ", " + $1->lexeme + " + 0(" + string(REGISTER[$1->array_index]) + ")\n"); 
+      reg::free_temp_reg($1->array_index);
+      reg::free_temp_reg($3->rdest);
+    }
   }
 
 method_call: T_ID T_LPAREN expr_comma_list T_RPAREN
@@ -643,6 +800,15 @@ lvalue: T_ID
     lvalue->lexeme = *$1;
     $$ = lvalue;
   }
+      | T_ID T_LSB expr T_RSB
+  {
+    attribute *lvalue = new attribute;
+    lvalue->token = string("lvalue");
+    lvalue->lexeme = *$1;
+    //cout << "lvalue " << *$1 << endl;
+    lvalue->array_index = $3->rdest; 
+    $$ = lvalue;
+  }
      ;
 
 expr: lvalue
@@ -655,7 +821,8 @@ expr: lvalue
   }
      | constant
   {
-    $$ = $1;
+    //cout << "Constant: " << $1->lexeme << endl;
+    $$ = constant(&($1->lexeme));
   }
      | expr T_PLUS expr
   {
@@ -739,7 +906,7 @@ expr: lvalue
   {
     attribute *imm = new attribute;
     imm->opcode_type = string("none");
-    imm->rdest = string("0");
+    imm->rdest = ZERO;
     $$ = binop_expr("seq", $2, imm);
   }
      | T_LPAREN expr T_RPAREN
@@ -754,7 +921,9 @@ n: {}
 
 constant: T_INTCONSTANT
   {
-    $$ = constant($1);
+    attribute *constant = new attribute;
+    constant->lexeme = *$1;
+    $$ = constant;
   }
      | T_CHARCONSTANT
   {
