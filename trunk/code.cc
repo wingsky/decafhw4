@@ -25,7 +25,18 @@ public:
 	}
 
 	void add(const string& c){
+		//cout << "ADD: "<< c;
 		code_list.push_back(c);
+		//print();
+		//cout << endl;
+	}
+
+	string& get(int i){
+		return code_list[i];
+	}
+
+	void remove(){
+		code_list.pop_back();
 	}
 
 	void print(){
@@ -37,10 +48,20 @@ public:
 		cout << s;
 	}
 
-	void backpatch(list<int>& l, int instr){
+	void backpatch(list<int>& l, string* label){
 		for(list<int>::iterator i = l.begin(); i != l.end(); ++i){
-			code_list[*i] += string(" ") + int_to_str(instr) + string("\n");
+			if(code_list[*i].find("jal") != string::npos ||
+					code_list[*i].find("beq") != string::npos){
+				int last_pos = code_list[*i].size();
+				code_list[*i].erase(last_pos - 1, 1);
+				last_pos = code_list[*i].size();
+				code_list[*i].erase(last_pos - 1, 1);
+
+				code_list[*i] += *label + string("\n");
+
+			}
 		}
+
 	}
 
 private:

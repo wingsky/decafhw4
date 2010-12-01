@@ -17,6 +17,15 @@
   semantics sem;
   code g_code;
   
+  
+  list<int> merge_list(list<int>& l, list<int>& r){
+    list<int> new_list = l;
+	new_list.merge(r);
+
+	return new_list;
+  }
+
+  
 
   attribute *constant(string *immvalue) {
     attribute *attr = new attribute;
@@ -42,6 +51,7 @@
       parent->opcode_type = "none";
       parent->add_child(*attr);
       parent->add_child(*attrlist);
+	  //parent->next_list = merge_list(attr->next_list, attrlist->next_list);
       DEBUG(parent->print("combine"));
 	  g_code.add(parent->asmcode());
       return parent;
@@ -94,12 +104,45 @@
     return var_decl;
   }
 
+  attribute* while_stmt(attribute *expr, attribute* block){
+	attribute *while_stmt= new attribute;
+	while_stmt->token = string("while");
+	while_stmt->opcode_type = "none";
+	while_stmt->add_child(*expr);
+	while_stmt->add_child(*block);
+
+	return while_stmt;
+  }
+
+  attribute* for_stmt(attribute* assign_comma_list1, attribute* expr, attribute* assign_comma_list2, attribute* block){
+    attribute* for_stmt = new attribute;
+	for_stmt->token = string("for");
+	for_stmt->opcode_type = "none";
+	for_stmt->add_child(*assign_comma_list1);
+	for_stmt->add_child(*expr);
+	for_stmt->add_child(*assign_comma_list2);
+	for_stmt->add_child(*block);
+
+	return for_stmt;
+  }
+
   attribute *if_else(attribute *expr, attribute *block){
+	attribute *if_else = new attribute;
+	if_else->token = string("if");
+	if_else->opcode_type = "none";
+	if_else->add_child(*expr);
+	if_else->add_child(*block);
+
+	return if_else;
+  }
+  
+  attribute *if_else(attribute *expr, attribute *block1, attribute *block2){
 	attribute *if_else = new attribute;
 	if_else->token = string("if_else");
 	if_else->opcode_type = "none";
 	if_else->add_child(*expr);
-	if_else->add_child(*block);
+	if_else->add_child(*block1);
+	if_else->add_child(*block2);
 
 	return if_else;
   }
@@ -155,7 +198,7 @@
 
     syscall_setup->opcode_type = "imm";
     syscall_setup->opcode = "li";
-    g_code.add(syscall_setup->asmcode());
+	g_code.add(syscall_setup->asmcode());
 
     attribute *callout = new attribute;
     callout->rdest = A0;
@@ -164,7 +207,7 @@
     //cout << "CALLOUT RSRC: " << attr->lexeme << attr->rsrc << endl; 
     callout->opcode_type = "load";
     callout->opcode = "move";
-    g_code.add(callout->asmcode());
+	g_code.add(callout->asmcode());
 
     attribute *syscall = new attribute;
     syscall->opcode_type = "none";
@@ -174,7 +217,7 @@
     syscall->add_child(*callout);
 
     DEBUG(syscall->print("callout"));
-    g_code.add(syscall->asmcode());
+	g_code.add(syscall->asmcode());
     return syscall;
   }
 
@@ -252,7 +295,7 @@
     expr->add_child(*left_expr);
     expr->add_child(*right_expr);
     DEBUG(expr->print("expr"));
-    g_code.add(expr->asmcode());
+	g_code.add(expr->asmcode());
 
     if (left_expr->rdest != expr->rdest) {
       reg::free_temp_reg(left_expr->rdest);
@@ -280,7 +323,7 @@
     unary_expr->opcode = string(opcode);
     unary_expr->add_child(*attr);
     DEBUG(unary_expr->print("unary_expr"));
-    g_code.add(unary_expr->asmcode());
+	g_code.add(unary_expr->asmcode());
 
     if (attr->rdest != unary_expr->rdest) {
       reg::free_temp_reg(unary_expr->rdest);
@@ -288,21 +331,35 @@
 
     return unary_expr;
   }
-  
-  list<int> merge_list(list<int>& l, list<int>& r){
-    list<int> new_list = l;
-	l.merge(r);
 
-	return r;
-  }
+  
+  
 
   string int_to_str(int i){
-    stringstream out;
-    out << i;
-    return out.str();
+	stringstream out;
+	out << i;
+	return out.str();
   }
 
- 
+  string* next_label(){
+	static int label_num = 0;
+	string* s = new string;
+	*s += string("$L") + int_to_str(++label_num);
+
+	string label = *s + string(":") + s_newline;
+	g_code.add(label);
+
+
+	return s;
+  }
+
+  int next_instr(string s){
+	int retval = g_code.get_next_instr();
+	g_code.add(s);
+	
+	return retval;
+}
+
 %}
 
 %union {
@@ -398,7 +455,13 @@
 %type <attr> var_decl_list
 %type <attr> start
 
-%type <ival> m
+%type <sval> generate_label
+%type <ival> jal
+%type <ival> begin_if_stmt
+%type <ival> end_if_stmt
+
+%type <sval> begin_expr
+%type <ival> end_expr
 
 %left T_OR
 %left T_AND
@@ -413,12 +476,14 @@
 
 %%
 
-start: program
+start: program generate_label
   {
-	g_code.print();
     //cout << sem.final(*$1) << endl;
     // $1->printtree(0);
-     delete $1;
+	g_code.backpatch($1->next_list, $2);
+	delete $1, $2;
+	
+	g_code.print();
   }
 
 program: T_CLASS class_name begin_block field_decl_list method_decl_list end_block
@@ -439,7 +504,6 @@ block: begin_block var_decl_list statement_list end_block
   {
     delete $2;
     $$ = $3;
-	$$->next_list = $3->next_list;
   }
 
 begin_block: T_LCB
@@ -454,11 +518,9 @@ end_block: T_RCB
 
 field_decl_list: field_decl_list field_decl
   {
-    //$$ = combine($2, $1);
   }
      | /* empty */ 
   {
-    //$$ = NULL;
   }
      ;
 
@@ -523,7 +585,6 @@ int_field_comma_list: T_COMMA field int_field_comma_list
     }
      | 
     {
-      //$$ = NULL;
     }
      ;
 
@@ -589,6 +650,7 @@ method_decl: T_VOID T_ID
 		  $$ = $7;
     }
      ;
+
 param_list: param_comma_list
   {
   }
@@ -628,18 +690,25 @@ var_decl_list: var_decl var_decl_list
   }
      ;
 
-statement_list: statement m statement_list
+statement_list: statement_list 
   {
-    $$ = combine($1, $3);
-
-	g_code.backpatch($1->next_list, $2);
-	if($3 != NULL){
-		$$->next_list = $3->next_list;
+	if(!($1->next_list.empty())){ 
+	  string* label = next_label();
+	  g_code.backpatch($1->next_list, label);
+	  delete label;
 	}
-  }
-     | /* empty */ 
+  }		
+	   statement
   {
-    $$ = NULL;
+    $$ = combine($3, $1);
+	
+	$$->break_list = merge_list($1->break_list, $3->break_list);
+	$$->continue_list = merge_list($1->continue_list, $3->continue_list);
+	$$->next_list = $3->next_list;
+  }
+     | statement 
+  {
+	$$ = $1;
   }
      ;
 
@@ -686,36 +755,111 @@ statement: assign T_SEMICOLON
   {
     $$ = $1;
   }
-     | T_IF T_LPAREN expr T_RPAREN m block n T_ELSE m block
+     | T_IF T_LPAREN expr T_RPAREN begin_if_stmt block end_if_stmt T_ELSE generate_label block
   {
+	$$ = if_else($3, $6, $10);
+
+	g_code.get($5) = string(" beq ") + REGISTER[$3->rdest] + string(" $zero ") + *$9 + string("\n");
+	$6->next_list.push_back($7);
+	$$->next_list = merge_list($6->next_list, $10->next_list);
+	$$->break_list = merge_list($6->break_list, $10->break_list);
+	$$->continue_list = merge_list($6->continue_list, $10->continue_list);
+	delete $9;
   }
-     | T_IF T_LPAREN expr T_RPAREN m block 
+     | T_IF T_LPAREN expr T_RPAREN begin_if_stmt block 
   {
     $$ = if_else($3, $6);
-	
-	g_code.backpatch($3->true_list, $5);
+
+	g_code.get($5) = string(" beq ") + REGISTER[$3->rdest] + string(" $zero _\n");
+	$3->false_list.push_back($5);
 	$$->next_list = merge_list($3->false_list, $6->next_list);
+	$$->break_list.merge($6->break_list);
+	$$->continue_list.merge($6->continue_list);
   }
-     | T_WHILE T_LPAREN expr T_RPAREN block
+     | T_WHILE begin_expr T_LPAREN expr T_RPAREN end_expr block
   {
+	$$ = while_stmt($4, $7);
+
+	g_code.get($6) = string(" beq ") + REGISTER[$4->rdest] + string(" $zero _\n");
+	g_code.backpatch($7->next_list, $2);
+	g_code.backpatch($7->continue_list, $2);
+	$$->next_list.push_back($6);
+	$$->next_list.merge($7->break_list);
+	g_code.add(string(" jal ") + *$2 + string("\n"));
+	delete $2;
   }
-     | T_FOR T_LPAREN assign_comma_list T_SEMICOLON expr T_SEMICOLON assign_comma_list T_RPAREN block
+     | T_FOR T_LPAREN assign_comma_list T_SEMICOLON begin_expr expr end_expr jal T_SEMICOLON generate_label assign_comma_list jal T_RPAREN generate_label block
   {
+	$$ = for_stmt($3, $6, $11, $15);
+
+	g_code.get($7) = string(" beq ") + REGISTER[$6->rdest] + string(" $zero _\n");
+	g_code.get($8) = string(" jal ") + *$14 + string("\n");
+	g_code.get($12) = string(" jal ") + *$5 + string("\n");
+	g_code.backpatch($15->next_list, $5);
+	g_code.backpatch($15->next_list, $5);
+	$$->next_list.push_back($7);
+	$$->next_list.merge($15->break_list);
+	g_code.add(string(" jal ") + *$10 + string("\n"));
+	delete $14, $5, $10;
   }
      | T_RETURN opt_expr T_SEMICOLON
   {
   }
      | T_BREAK T_SEMICOLON
   {
+	attribute* break_stmt = new attribute;
+
+	break_stmt->break_list.push_back(next_instr(string(" jal _\n")));
+	$$ = break_stmt;
   }
      | T_CONTINUE T_SEMICOLON
   {
+	attribute* continue_stmt = new attribute;
+
+	continue_stmt->continue_list.push_back(next_instr(string(" jal _\n")));
+	$$ = continue_stmt;
   }
      | block
   {
     $$ = $1;
   }
      ;
+
+begin_expr: 
+  {
+	$$ = next_label();
+  }
+     ;
+
+end_expr: 
+  {
+	$$ = next_instr(string("\n"));
+  }
+	 ;
+
+begin_if_stmt: 
+  { 
+	$$ = next_instr(string("\n"));
+  }
+	;
+end_if_stmt:
+  {
+	$$ = next_instr(string(" jal _\n"));
+  }
+
+jal:
+  {
+	$$ = next_instr(string(" jal _\n"));
+  }
+
+generate_label: 
+  { 
+	$$ = next_label();
+  }
+	;
+
+
+
 
 assign: lvalue T_ASSIGN expr
   {
@@ -738,7 +882,7 @@ assign: lvalue T_ASSIGN expr
   }
 
 method_call: T_ID T_LPAREN expr_comma_list T_RPAREN
-  {
+  {	
   
   }
            | T_CALLOUT T_LPAREN T_STRINGCONSTANT callout_arg_comma_list T_RPAREN
@@ -890,13 +1034,9 @@ expr: lvalue
   {
     $$ = binop_expr("and", $1, $3);
   }
-     | expr T_OR m expr
+     | expr T_OR  expr
   {
-    $$ = binop_expr("or", $1, $4);
-
-	g_code.backpatch($1->false_list, $3);
-	$$->true_list = merge_list($1->true_list, $4->true_list);
-	$$->false_list = $4->false_list;
+    $$ = binop_expr("or", $1, $3);
   }
      | T_MINUS expr %prec UMINUS 
   {
@@ -915,10 +1055,6 @@ expr: lvalue
   }
      ;
 
-m: { $$ = g_code.get_next_instr(); }
-
-n: {}
-
 constant: T_INTCONSTANT
   {
     attribute *constant = new attribute;
@@ -933,17 +1069,11 @@ constant: T_INTCONSTANT
   {
     string trueval("1");
     $$ = constant(&trueval);
-
-	$$->true_list = list<int> (1, g_code.get_next_instr());
-	g_code.add(string(s_pad) + string("goto _") + string(s_newline));
   }
      | T_FALSE
   {
     string falseval("0");
     $$ = constant(&falseval);
-	
-	$$->false_list = list<int> (1, g_code.get_next_instr());
-	g_code.add(string(s_pad) + string("goto _") + string(s_newline));
   }
      ;
 
