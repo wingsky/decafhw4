@@ -47,6 +47,8 @@ public:
   list<int> true_list;
   list<int> false_list;
   list<int> next_list;
+  list<int> break_list;
+  list<int> continue_list;
 
   int inherited; // non-zero means this attribute is inherited
 
