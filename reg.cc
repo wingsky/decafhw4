@@ -53,11 +53,12 @@ public:
     return;
   }
 
-  static int get_empty_reg() {
+  static int get_empty_reg(string id_string) {
 
     for (int i = S0; i <= S7; i++) {
       if (regtbl[i].empty()) {
-        regtbl[i].push_front("");
+        regtbl[i].push_front(id_string);
+        //cout << "REGTBL: " << i << " " << id_string << endl;
         return i;
       }
     }

@@ -50,6 +50,9 @@ public:
   list<int> break_list;
   list<int> continue_list;
 
+
+  map<string, string> arglist;
+
   int inherited; // non-zero means this attribute is inherited
 
   // constructor sets up the various variables and the free register list

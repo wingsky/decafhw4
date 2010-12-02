@@ -79,11 +79,21 @@ public:
     symbol_register_list.pop_front();
   }
 
+  void enter_method(string name, string r_type, map<string, string> arg) {
+    
+    method_descriptor* d = new method_descriptor(name, r_type, arg);
+    mtdtbl[name] = d;
+
+  }
+
+  typedef map<string, method_descriptor* > method_table;
+  method_table mtdtbl; 
+
 private:
   list<string> symbol_register_list;
   typedef map<string, descriptor* > symbol_table;
   typedef list<symbol_table > symbol_table_list;
   symbol_table_list symtbl;
-  
+
 };
 
