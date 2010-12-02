@@ -4,6 +4,7 @@
 
 #include <string>
 #include "descriptor.cc"
+#include "method_descriptor.cc"
 #include "attribute.cc"
 #include "semantics.cc"
 #include "code.cc"
