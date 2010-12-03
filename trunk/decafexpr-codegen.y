@@ -17,7 +17,7 @@
   code g_code;
   string block_owner = "";
   int method_start_pos; 
-  
+
   
   list<int> merge_list(list<int>& l, list<int>& r){
     list<int> new_list = l;
@@ -183,41 +183,70 @@
   }
 
   attribute *callout(string *callout_fn, attribute *attr) {
-    attribute *syscall_setup = new attribute;
+	attribute *syscall_setup = new attribute;
     syscall_setup->rdest = V0;
     syscall_setup->imm = "_ERROR_";
 
-    if (*callout_fn == "\"print_int\"")
+    if (*callout_fn == "\"print_int\""){
       syscall_setup->imm = "1";
-    if (*callout_fn == "\"read_int\"")
+	  if(attr == NULL){
+		cerr << "callout function " << *callout_fn << " should have a second argument!" << endl;
+		throw runtime_error("callout function missing argument");
+	  }else if(attr->token == "stringconst"){
+		cerr << "callout function " << *callout_fn << "'s second argument must be expression!'" << endl;
+		throw runtime_error("callout function wrong argument type");
+	  }
+
+	}
+    else if (*callout_fn == "\"read_int\"")
       syscall_setup->imm = "5";
-    if (*callout_fn == "\"print_string\"")
+    else if (*callout_fn == "\"print_string\""){
       syscall_setup->imm = "4";
+	  if(attr == NULL){
+		cerr << "callout function " << *callout_fn << " should have a second argument!" << endl;
+		throw runtime_error("callout function missing argument");
+	  } else if(attr->token != "stringconst"){
+		cerr << "callout function " << *callout_fn << "'s second argument must be string constant!'" << endl;
+		throw runtime_error("callout function wrong argument type");
+	  }
+	}
 
     if (syscall_setup->imm == "_ERROR_") {
       cerr << "callout function " << *callout_fn << " is not supported" << endl;
       throw runtime_error("callout function not supported");
     }
 
+
     syscall_setup->opcode_type = "imm";
     syscall_setup->opcode = "li";
 	g_code.add(syscall_setup->asmcode());
 
-    attribute *callout = new attribute;
-    callout->rdest = A0;
-    callout->rsrc = attr->rdest;
-    //cout << "CALLOUT RDEST: " << attr->lexeme << attr->rdest << endl;
-    //cout << "CALLOUT RSRC: " << attr->lexeme << attr->rsrc << endl; 
-    callout->opcode_type = "load";
-    callout->opcode = "move";
-	g_code.add(callout->asmcode());
+	attribute* callout = NULL;
+	if(*callout_fn == "\"print_int\""){
+		callout = new attribute;
+		callout->rdest = A0;
+		callout->rsrc = attr->rdest;
+		//cout << "CALLOUT RDEST: " << attr->lexeme << attr->rdest << endl;
+		//cout << "CALLOUT RSRC: " << attr->lexeme << attr->rsrc << endl; 
+		callout->opcode_type = "load";
+		callout->opcode = "move";
+		g_code.add(callout->asmcode());
+	} else if(*callout_fn == "\"print_string\""){
+		//callout = new attribute;
+		g_code.add(" la " + string(REGISTER[A0]) + ", " + attr->lexeme + string("\n"));
+	}
 
     attribute *syscall = new attribute;
     syscall->opcode_type = "none";
     syscall->opcode = "syscall";
-    syscall->add_child(*attr);
+	if(*callout_fn == "\"read_int\""){
+		syscall->rdest = V0;
+	}
     syscall->add_child(*syscall_setup);
-    syscall->add_child(*callout);
+    if(callout != NULL){
+		syscall->add_child(*attr);
+		syscall->add_child(*callout);
+	}
 
     DEBUG(syscall->print("callout"));
 	g_code.add(syscall->asmcode());
@@ -427,6 +456,7 @@ void callee_begin(method_descriptor *d) {
     return;
   }
 
+ 
 %}
 
 %union {
@@ -555,7 +585,7 @@ start: program generate_label
     // $1->printtree(0);
 	g_code.backpatch($1->next_list, $2);
 	delete $1, $2;
-	
+
 	g_code.print();
   }
 
@@ -921,8 +951,8 @@ statement: assign T_SEMICOLON
 	g_code.get($7) = string(" beq ") + REGISTER[$6->rdest] + string(" $zero _\n");
 	g_code.get($8) = string(" jal ") + *$14 + string("\n");
 	g_code.get($12) = string(" jal ") + *$5 + string("\n");
-	g_code.backpatch($15->next_list, $5);
-	g_code.backpatch($15->next_list, $5);
+	//g_code.backpatch($15->next_list, $5);
+	g_code.backpatch($15->next_list, $10);
 	$$->next_list.push_back($7);
 	$$->next_list.merge($15->break_list);
 	g_code.add(string(" jal ") + *$10 + string("\n"));
@@ -1050,7 +1080,7 @@ callout_arg: expr
   {
     attribute *stringconst = new attribute;
     stringconst->token = string("stringconst");
-    stringconst->lexeme = *$1;
+    stringconst->lexeme = g_code.next_str_label(*$1);
     $$ = stringconst;
   }
      ;

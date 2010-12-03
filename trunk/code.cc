@@ -3,17 +3,24 @@
 #include <list>
 #include <string>
 #include <vector>
+#include <map>
 
 using namespace std;
+
+static const char* label_prefix = "str";
 
 class code{
 
 private:
 	vector<string> code_list;
+	map<string, string> str_constant_list;
+
+	int label_count;
 
 
 public:
 	code(){
+		label_count = 0;
 	}
 
 	int get_current_instr(){
@@ -23,6 +30,14 @@ public:
 	int get_next_instr(){
 		return code_list.size();
 	}
+
+	string next_str_label(string s){
+		string new_label = string(label_prefix) + int_to_str(++label_count);
+		str_constant_list.insert(pair<string, string>(s, new_label+string(":\n")));
+
+		return new_label;
+	}
+
 
 	void add(const string& c){
 		//cout << "ADD: "<< c;
@@ -41,6 +56,13 @@ public:
 
 	void print(){
 		string s;
+		s += string("\t.data\n");
+		for(map<string, string>::iterator i = str_constant_list.begin(); i != str_constant_list.end(); ++i){
+			s += i->second;
+			s += string("\t.asciiz ") + i->first + string("\n");
+		}
+
+		s += "\t.text\n";
 		for(vector<string>::iterator i = code_list.begin(); i != code_list.end(); ++i){
 			s += *i;
 		}
