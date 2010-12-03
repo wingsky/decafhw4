@@ -33,7 +33,7 @@ public:
 
 	string next_str_label(string s){
 		string new_label = string(label_prefix) + int_to_str(++label_count);
-		str_constant_list.insert(pair<string, string>(s, new_label+string(":\n")));
+		str_constant_list.insert(pair<string, string>(s, new_label+string(":")));
 
 		return new_label;
 	}
@@ -58,8 +58,7 @@ public:
 		string s;
 		s += string("\t.data\n");
 		for(map<string, string>::iterator i = str_constant_list.begin(); i != str_constant_list.end(); ++i){
-			s += i->second;
-			s += string("\t.asciiz ") + i->first + string("\n");
+			s += i->second + string(" .asciiz ") + i->first + string("\n");
 		}
 
 		s += "\t.text\n";
@@ -72,7 +71,7 @@ public:
 
 	void backpatch(list<int>& l, string* label){
 		for(list<int>::iterator i = l.begin(); i != l.end(); ++i){
-			if(code_list[*i].find("jal") != string::npos ||
+			if(code_list[*i].find("j") != string::npos ||
 					code_list[*i].find("beq") != string::npos){
 				int last_pos = code_list[*i].size();
 				code_list[*i].erase(last_pos - 1, 1);

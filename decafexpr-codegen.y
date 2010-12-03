@@ -2,6 +2,7 @@
 #include "decafexpr-codegen-defs.h"
 #include <iostream>
 #include <stdexcept>
+#include <set>
 
 //#define _DEBUG_ON
 
@@ -12,6 +13,11 @@
 #endif
 
   using namespace std;
+
+  static const char* INTEGER_OP[] = {"+","-","*","/","<<",">>","rot","%","<",">","<=",">="};
+  static const char* BOOL_OP[] = {"&&", "||", "!"};
+  set<const char*> integer_op_set(INTEGER_OP, INTEGER_OP + sizeof(INTEGER_OP));
+  set<const char*> bool_op_set(BOOL_OP, BOOL_OP + sizeof(BOOL_OP));
 
   semantics sem;
   code g_code;
@@ -28,11 +34,12 @@
 
   
 
-  attribute *constant(string *immvalue) {
+  attribute *constant(string *immvalue, int type) {
     attribute *attr = new attribute;
     attr->token = string("constant");
     attr->lexeme = *immvalue;
     attr->imm = *immvalue;
+	attr->type = type;
     attr->opcode_type = "imm";
     attr->opcode = "li";
     attr->rdest = reg::get_temp_reg(-1, -1);
@@ -153,6 +160,10 @@
     descriptor *d = sem.access_symtbl(attr->lexeme);
     int reg;
 
+	if(d->type != expr->type){
+		cerr << "type mismatch between when assign value to variable '" << attr->lexeme << "'" << endl;
+        throw runtime_error("type mismatch");
+	}
     if (d != NULL) {
       if ((d->rdest == -1)) {
         reg = reg::get_empty_reg(attr->lexeme);
@@ -256,30 +267,33 @@
   attribute *expr_lvalue(attribute *token) {
     descriptor *d = sem.access_symtbl(token->lexeme);
     int reg;
-    
+	int type;
+	
+	if(d == NULL){
+		cerr << "variable " << token->lexeme << " used before it was defined" << endl;
+        throw runtime_error("variable not in symbol table");
+	}
+   
+    attribute *lvalue = new attribute;
+	
+	lvalue->type = d->type;
+	lvalue->lexeme = token->lexeme;
     //cout << "expr_lvalue: " << token->lexeme << token->array_index << endl;
     //cout << "register: " << d->rdest << endl;
 
-    attribute *lvalue = new attribute;
     // If the lvalue is not an array entry
     if (token->array_index == -1) {
-      if (d != NULL) {
-
         // If it is not in an register (global var or spilled local var)
-        if ((d->rdest == -1)) {
-          //cerr << "variable " << token->lexeme << " used before a value was assigned" << endl;
-          //throw runtime_error("variable not in symbol table");
-          d->rdest = reg::get_empty_reg(token->lexeme);
-          reg = d->rdest;
-          g_code.add(" lw " + string(REGISTER[d->rdest]) + ", " + d->memoryaddr + "\n");
-        } else {
-          reg = d->rdest;
-        }
-
-      } else {
-        cerr << "variable " << token->lexeme << " used before it was defined" << endl;
-        throw runtime_error("variable not in symbol table");
-      }
+  
+      if ((d->rdest == -1)) {
+	    //cerr << "variable " << token->lexeme << " used before a value was assigned" << endl;
+	    //throw runtime_error("variable not in symbol table");
+	    d->rdest = reg::get_empty_reg(token->lexeme);
+	    reg = d->rdest;
+	    g_code.add(" lw " + string(REGISTER[d->rdest]) + ", " + d->memoryaddr + "\n");
+	  } else {
+	    reg = d->rdest;
+	  }
 
       lvalue->opcode_type = "none";
       lvalue->rdest = reg;
@@ -303,8 +317,25 @@
     return lvalue;
   }
 
-attribute *binop_expr(const char *opcode, attribute *left_expr, attribute *right_expr) {
+attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, attribute *right_expr) {
+	if(left_expr->type != right_expr->type){
+		cerr << "type mismatch between " << left_expr->lexeme << " and " << right_expr->lexeme << endl;
+        throw runtime_error("type mismatch");
+	}
+	if(integer_op_set.find(op) !=integer_op_set.end()){
+		if(left_expr->type != T_INT){
+			cerr << "operator " << op << " must only accept int type" << endl;
+			throw runtime_error("operator type error");
+		}
+	}
+	if(bool_op_set.find(op) != bool_op_set.end()){
+		if(left_expr->type != T_BOOL){
+			cerr << "operator " << op << " must only accept bool type" << endl;
+			throw runtime_error("operator type error");
+		}
+	}
     attribute *expr = new attribute;
+	expr->type = left_expr->type;
     expr->opcode_type = "reuse";
 /*
     if ((left_expr->rdest == "") || (left_expr->opcode_type != "none")) {
@@ -447,7 +478,7 @@ void callee_begin(method_descriptor *d) {
     }
 
     // jal to function
-    g_code.add(" jal " + callee_name + "\n");
+    g_code.add(" j " + callee_name + "\n");
 
     return;
   }
@@ -632,7 +663,7 @@ field_decl_list: field_decl_list field_decl
 
 field_decl: T_INT field int_field_comma_list T_SEMICOLON
     {
-      sem.enter_symtbl($2->lexeme, *$1, -1, $2->lexeme);
+      sem.enter_symtbl($2->lexeme, T_INT, -1, $2->lexeme);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -649,7 +680,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
     }
      | T_BOOL field bool_field_comma_list T_SEMICOLON
     {
-      sem.enter_symtbl($2->lexeme, *$1, -1, $2->lexeme);
+      sem.enter_symtbl($2->lexeme, T_BOOL, -1, $2->lexeme);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -664,7 +695,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
     }
      | T_INT T_ID T_ASSIGN constant T_SEMICOLON
     {
-      sem.enter_symtbl(*$2, *$1, -1, *$2);
+      sem.enter_symtbl(*$2, T_INT, -1, *$2);
       sem.access_symtbl(*$2)->global = 1;
       // Address of the global variable is its name
       g_code.add(".globl " + *$2 + "\n");
@@ -672,7 +703,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
     }
      | T_BOOL T_ID T_ASSIGN constant T_SEMICOLON
     {
-      sem.enter_symtbl(*$2, *$1, -1, *$2);
+      sem.enter_symtbl(*$2, T_BOOL, -1, *$2);
       sem.access_symtbl(*$2)->global = 1;
       // Address of the global variable is its name
       g_code.add(".globl " + *$2 + "\n");
@@ -682,7 +713,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
 
 int_field_comma_list: T_COMMA field int_field_comma_list
     {
-      sem.enter_symtbl($2->lexeme, string("int"), -1, $2->lexeme);
+      sem.enter_symtbl($2->lexeme, T_INT, -1, $2->lexeme);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -696,7 +727,7 @@ int_field_comma_list: T_COMMA field int_field_comma_list
 
 bool_field_comma_list: T_COMMA field bool_field_comma_list
     {
-      sem.enter_symtbl($2->lexeme, string("bool"), -1, $2->lexeme);
+      sem.enter_symtbl($2->lexeme, T_BOOL, -1, $2->lexeme);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -861,7 +892,7 @@ statement_list: statement_list
 var_decl: T_INT T_ID int_id_comma_list T_SEMICOLON
   {
 	// TODO: NO TYPE CHEKCING!!!!!!!!!!!!!!!!!
-    sem.enter_symtbl(*$2, *$1, -1, "");
+    sem.enter_symtbl(*$2, T_INT, -1, "");
     $$ = var_decl($2, $3);
     if (block_owner == "") {
       cout << "ERROR: empty block_owner\n";
@@ -871,7 +902,7 @@ var_decl: T_INT T_ID int_id_comma_list T_SEMICOLON
      | T_BOOL T_ID bool_id_comma_list T_SEMICOLON
   {
 	// TODO: NO TYEP CHECKING!!!!!!!!!!!!!!!!!
-    sem.enter_symtbl(*$2, *$1, -1, "");
+    sem.enter_symtbl(*$2, T_BOOL, -1, "");
     $$ = var_decl($2, $3);
     if (block_owner == "") {
       cout << "ERROR: empty block_owner\n";
@@ -885,7 +916,7 @@ int_id_comma_list: /* empty */
   }
      | T_COMMA T_ID int_id_comma_list
   {
-    sem.enter_symtbl(*$2, string("int"), -1, "");
+    sem.enter_symtbl(*$2, T_INT, -1, "");
     $$ = var_decl($2, $3);
     sem.mtdtbl[block_owner]->var_count++;
   }
@@ -897,7 +928,7 @@ bool_id_comma_list: /* empty */
   }
      | T_COMMA T_ID bool_id_comma_list
   {
-    sem.enter_symtbl(*$2, string("bool"), -1, "");
+    sem.enter_symtbl(*$2, T_BOOL, -1, "");
     $$ = var_decl($2, $3);
     sem.mtdtbl[block_owner]->var_count++;
   }
@@ -941,7 +972,7 @@ statement: assign T_SEMICOLON
 	g_code.backpatch($7->continue_list, $2);
 	$$->next_list.push_back($6);
 	$$->next_list.merge($7->break_list);
-	g_code.add(string(" jal ") + *$2 + string("\n"));
+	g_code.add(string(" j ") + *$2 + string("\n"));
 	delete $2;
   }
      | T_FOR T_LPAREN assign_comma_list T_SEMICOLON begin_expr expr end_expr jal T_SEMICOLON generate_label assign_comma_list jal T_RPAREN generate_label block
@@ -949,13 +980,13 @@ statement: assign T_SEMICOLON
 	$$ = for_stmt($3, $6, $11, $15);
 
 	g_code.get($7) = string(" beq ") + REGISTER[$6->rdest] + string(" $zero _\n");
-	g_code.get($8) = string(" jal ") + *$14 + string("\n");
-	g_code.get($12) = string(" jal ") + *$5 + string("\n");
+	g_code.get($8) = string(" j ") + *$14 + string("\n");
+	g_code.get($12) = string(" j ") + *$5 + string("\n");
 	//g_code.backpatch($15->next_list, $5);
 	g_code.backpatch($15->next_list, $10);
 	$$->next_list.push_back($7);
 	$$->next_list.merge($15->break_list);
-	g_code.add(string(" jal ") + *$10 + string("\n"));
+	g_code.add(string(" j ") + *$10 + string("\n"));
 	delete $14, $5, $10;
   }
      | T_RETURN opt_expr T_SEMICOLON
@@ -965,14 +996,14 @@ statement: assign T_SEMICOLON
   {
 	attribute* break_stmt = new attribute;
 
-	break_stmt->break_list.push_back(next_instr(string(" jal _\n")));
+	break_stmt->break_list.push_back(next_instr(string(" j _\n")));
 	$$ = break_stmt;
   }
      | T_CONTINUE T_SEMICOLON
   {
 	attribute* continue_stmt = new attribute;
 
-	continue_stmt->continue_list.push_back(next_instr(string(" jal _\n")));
+	continue_stmt->continue_list.push_back(next_instr(string(" j _\n")));
 	$$ = continue_stmt;
   }
      | block
@@ -1000,12 +1031,12 @@ begin_if_stmt:
 	;
 end_if_stmt:
   {
-	$$ = next_instr(string(" jal _\n"));
+	$$ = next_instr(string(" j _\n"));
   }
 
 jal:
   {
-	$$ = next_instr(string(" jal _\n"));
+	$$ = next_instr(string(" j _\n"));
   }
 
 generate_label: 
@@ -1123,77 +1154,78 @@ expr: lvalue
      | constant
   {
     //cout << "Constant: " << $1->lexeme << endl;
-    $$ = constant(&($1->lexeme));
+    $$ = constant(&($1->lexeme), $1->type);
+	delete $1;
   }
      | expr T_PLUS expr
   {
-    $$ = binop_expr("addu", $1, $3);
+    $$ = binop_expr("addu", "+", $1, $3);
   }
      | expr T_MINUS expr
   {
-    $$ = binop_expr("subu", $1, $3);
+    $$ = binop_expr("subu", "-", $1, $3);
   }
      | expr T_MULT expr
   {
-    $$ = binop_expr("mul", $1, $3);
+    $$ = binop_expr("mul", "*", $1, $3);
   }
      | expr T_DIV expr
   {
-    $$ = binop_expr("divu", $1, $3);
+    $$ = binop_expr("divu", "/", $1, $3);
   }
      | expr T_LEFTSHIFT expr
   {
-    $$ = binop_expr("sllv", $1, $3);
+    $$ = binop_expr("sllv", "<<", $1, $3);
   }
      | expr T_RIGHTSHIFT expr
   {
-    $$ = binop_expr("srlv", $1, $3);
+    $$ = binop_expr("srlv", ">>", $1, $3);
   }
      | expr T_ROT expr
   {
     // this should include either a mod instruction or a branch,
     // removed the correct implementation here due to overlap with hw4
     if ($3->opcode == "neg") {
-      $$ = binop_expr("ror", $1, $3); // rotate right if right expr is -1
+      $$ = binop_expr("ror", "rot", $1, $3); // rotate right if right expr is -1
     } else {
-      $$ = binop_expr("ror", $1, $3); // else rotate left
+      $$ = binop_expr("ror", "rot", $1, $3); // else rotate left
     }
   }
      | expr T_MOD expr
   {
-    $$ = binop_expr("rem", $1, $3);
+    $$ = binop_expr("rem", "%", $1, $3);
   }
      | expr T_LT expr
   {
-    $$ = binop_expr("slt", $1, $3);
+    $$ = binop_expr("slt", "<", $1, $3);
   }
      | expr T_GT expr
   {
-    $$ = binop_expr("sge", $1, $3);
+    $$ = binop_expr("sgt", ">", $1, $3);
   }
      | expr T_LEQ expr
   {
-    $$ = binop_expr("sle", $1, $3);
+    $$ = binop_expr("sle", "<=", $1, $3);
   }
      | expr T_GEQ expr
   {
-    $$ = binop_expr("sgeu", $1, $3);
+    $$ = binop_expr("sge", ">=", $1, $3);
   }
      | expr T_EQ expr
   {
-    $$ = binop_expr("seq", $1, $3);
+    $$ = binop_expr("seq", "==", $1, $3);
   }
      | expr T_NEQ expr
   {
-    $$ = binop_expr("sne", $1, $3);
+    $$ = binop_expr("sne", "!=", $1, $3);
   }
      | expr T_AND expr
   {
-    $$ = binop_expr("and", $1, $3);
+    $$ = binop_expr("and", "&&", $1, $3);
   }
      | expr T_OR  expr
   {
-    $$ = binop_expr("or", $1, $3);
+    $$ = binop_expr("or", "||", $1, $3);
   }
      | T_MINUS expr %prec UMINUS 
   {
@@ -1204,7 +1236,7 @@ expr: lvalue
     attribute *imm = new attribute;
     imm->opcode_type = string("none");
     imm->rdest = ZERO;
-    $$ = binop_expr("seq", $2, imm);
+    $$ = binop_expr("seq", "!", $2, imm);
   }
      | T_LPAREN expr T_RPAREN
   {
@@ -1216,21 +1248,22 @@ constant: T_INTCONSTANT
   {
     attribute *constant = new attribute;
     constant->lexeme = *$1;
+	constant->type = T_INT;
     $$ = constant;
   }
      | T_CHARCONSTANT
   {
-    $$ = constant($1);
+    $$ = constant($1, T_CHARCONSTANT);
   }
      | T_TRUE
   {
     string trueval("1");
-    $$ = constant(&trueval);
+    $$ = constant(&trueval, T_BOOL);
   }
      | T_FALSE
   {
     string falseval("0");
-    $$ = constant(&falseval);
+    $$ = constant(&falseval, T_BOOL);
   }
      ;
 
