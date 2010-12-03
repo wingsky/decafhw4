@@ -79,11 +79,36 @@ public:
     symbol_register_list.pop_front();
   }
 
-  void enter_method(string name, string r_type, map<string, string> arg) {
+  void enter_method(string name, int r_type, map<string, int> arg) {
     
     method_descriptor* d = new method_descriptor(name, r_type, arg);
     mtdtbl[name] = d;
 
+  }
+
+  string calc_addr(long offset) {
+    string tmp_s = "";
+    return tmp_s;
+  }
+  string spill_reg(int reg, long offset) {
+    
+    string tmp_s = "";
+
+    if ((reg < S0) || (reg > S7)) {
+      cout << "ERROR: Cannot spill registers other than $s0-$s7\n";
+      exit(1);
+    }
+    // Currently one register can only hold one variable
+    string var = regtbl[reg].front();
+    // Get addr in the heap
+    string addr_s = calc_addr(offset);
+
+    tmp_s += "sw " + string(REGISTER[reg]) + ", " + addr_s + "($gp)\n";
+
+    descriptor *d = access_symtbl(var);
+    d->memoryaddr = addr_s;
+    d->rdest = -1;
+    regtbl[reg].clear();
   }
 
   typedef map<string, method_descriptor* > method_table;
