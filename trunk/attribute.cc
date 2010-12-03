@@ -50,6 +50,8 @@ public:
   list<int> break_list;
   list<int> continue_list;
 
+  int type;
+
 
   map<string, string> arglist;
 
@@ -75,6 +77,7 @@ public:
     mipsCode = "";
 
     inherited = 0;
+	type = -1;
   }
 /*
   void init_free_registers() {

@@ -41,7 +41,7 @@ public:
     symtbl.pop_front();
   }
 
-  void enter_symtbl(string ident, string type, int rdest, string memoryaddr) {
+  void enter_symtbl(string ident, int type, int rdest, string memoryaddr) {
     symbol_table* tbl;
     symbol_table::iterator find_ident;
 
@@ -54,7 +54,7 @@ public:
       delete(find_ident->second);
       tbl->erase(ident);
     }
-    descriptor* d = new descriptor(ident, rdest, memoryaddr);
+    descriptor* d = new descriptor(ident, type, rdest, memoryaddr);
     (*tbl)[ident] = d;
   }
 

@@ -6,22 +6,25 @@ using namespace std;
 
 class descriptor {
 public:
-  string type;
+  int type;
+  string name;
   int rdest;
   string memoryaddr;
   int global;
   int array_length;
 
   descriptor(string t) {
-    type = t;
+	name = t;
+    //type = t;
     rdest = -1;
     memoryaddr = "";
     global = 0;
     array_length = 0;
   }
 
-  descriptor(string t, int r, string ma) {
-    type = t;
+  descriptor(string n, int t, int r, string ma) {
+    name = n;
+	type = t;
     rdest = r;
     memoryaddr = ma;
     global = 0;
@@ -29,7 +32,7 @@ public:
   }
 
   void print() {
-    cerr << "type: " << type << endl;
+    cerr << "name: " << name << endl;
     cerr << "register: " << rdest << endl;
     cerr << "memory address: " << memoryaddr << endl;
   }
