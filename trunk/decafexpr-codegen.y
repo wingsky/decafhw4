@@ -26,6 +26,7 @@
   long global_size = 0;
   long heap_offset = 0; 
   
+
   list<int> merge_list(list<int>& l, list<int>& r){
     list<int> new_list = l;
 	new_list.merge(r);
@@ -660,9 +661,9 @@ start: program
     */
     //cout << sem.final(*$1) << endl;
     // $1->printtree(0);
-	if(!($1->next_list.empty())){
-		g_code.backpatch($1->next_list, next_label());
-	}	
+	//if(!($1->next_list.empty())){
+	//	g_code.backpatch($1->next_list, next_label());
+	//}	
 	delete $1;
 
 	g_code.print();
@@ -812,6 +813,9 @@ method_decl_list: method_decl_list method_decl
 	}
      | method_decl
 	{
+		if(!($1->next_list.empty())){
+			g_code.backpatch($1->next_list, next_label());
+		}
 		$$ = $1;
 	}
      ;
