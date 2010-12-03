@@ -30,7 +30,7 @@ public:
 	int get_next_instr(){
 		return code_list.size();
 	}
-
+  
 	string next_str_label(string s){
 		string new_label = string(label_prefix) + int_to_str(++label_count);
 		str_constant_list.insert(pair<string, string>(s, new_label+string(":")));
@@ -44,7 +44,18 @@ public:
 		code_list.push_back(c);
 		//print();
 		//cout << endl;
+    //cout << c << endl;
 	}
+
+  void insert(int pos, const string& c) {
+    vector<string>::iterator it;
+    it = code_list.begin();
+    for (int i = 0; i < pos; i++) {
+      it++;
+    }
+
+    code_list.insert(it, c);
+  }
 
 	string& get(int i){
 		return code_list[i];

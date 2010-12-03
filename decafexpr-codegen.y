@@ -22,8 +22,8 @@
   semantics sem;
   code g_code;
   string block_owner = "";
-  int method_start_pos; 
-
+  int tmp_pos; 
+  long heap_offset = 0; 
   
   list<int> merge_list(list<int>& l, list<int>& r){
     list<int> new_list = l;
@@ -230,7 +230,7 @@
 
     syscall_setup->opcode_type = "imm";
     syscall_setup->opcode = "li";
-	g_code.add(syscall_setup->asmcode());
+    g_code.add(syscall_setup->asmcode());
 
 	attribute* callout = NULL;
 	if(*callout_fn == "\"print_int\""){
@@ -260,7 +260,7 @@
 	}
 
     DEBUG(syscall->print("callout"));
-	g_code.add(syscall->asmcode());
+    g_code.add(syscall->asmcode());
     return syscall;
   }
 
@@ -308,7 +308,7 @@
       reg = reg::get_temp_reg(-1, -1);
       int offset = token->array_index;
       g_code.add(" mul " + string(REGISTER[offset]) + ", " + string(REGISTER[offset]) + ", 4\n");
-      g_code.add(" lw " + string(REGISTER[reg]) + ", " + token->lexeme + " + 0(" + string(REGISTER[offset]) + ")\n");
+      g_code.add(" lw " + string(REGISTER[reg]) + ", " + token->lexeme + " + 0(" + string(REGISTER[offset]) + ")  # load array from mem\n");
       reg::free_temp_reg(offset);
       lvalue->opcode_type = "none";
       lvalue->rdest = reg;
@@ -426,65 +426,101 @@ int next_instr(string s){
 	return retval;
 }
 
-void callee_begin(method_descriptor *d) {
-
+string callee_save(method_descriptor *d) {
+      
+      string tmp_s = "";
       int var_count = d->var_count;
       int arg_count = d->args.size();
-      int stack_size = (2 + var_count + arg_count) * 4;
-      if ((stack_size % 8) != 0) {
-        stack_size = stack_size + 4;
+      d->stack_size = (18 + 2 + arg_count) * 4; // $t + $s + $ra + $fp + arguments
+      if ((d->stack_size % 8) != 0) {
+        d->stack_size = d->stack_size + 4;
       }
       
-      g_code.add(" subu $sp, $sp, " + int_to_str(stack_size));
+      tmp_s += " subu $sp, $sp, " + int_to_str(d->stack_size) + "\n";
+      tmp_s += " sw $ra, " + int_to_str(d->stack_size - 4) + "($sp)\n";
+      tmp_s += " sw $fp, " + int_to_str(d->stack_size - 8) + "($sp)\n";
+      // Set its $fp
+      tmp_s += " addiu $fp, $sp, " + int_to_str(d->stack_size - 4) + "\n";
 
-      g_code.add(" sw $ra, 20($sp)\n");
-      g_code.add(" sw $fp, 16($sp)\n");
-      
-      // Save non-empty s registers
+      d->hi_ptr = d->stack_size - 12;
+      d->lo_ptr = 0;
+
       for (int i = S0; i <= S7; i++) {
-        // Save to heap if s is not empty
+        // Save to stack if s is not empty
+        //if ( !regtbl[i].empty()) {
+          tmp_s += " sw " + string(REGISTER[i]) + ", " + int_to_str(d->lo_ptr) + "($sp)  # callee save\n";  
+          d->saved_regs.push_back(i);
+          d->lo_ptr = d->lo_ptr + 4;
+          regtbl[i].clear();
+        //}
       }
-      g_code.add(" addiu $fp, $sp, 28\n");
-      return;
+      //d->lo_ptr = d->lo_ptr - 4;
+      
+      // Put arguments into registers
+      map<string, int>::iterator it;
+      int s_reg;
+      for( it = d->args.begin(); it != d->args.end(); it++) {
+        s_reg = reg::get_empty_reg((*it).first);
+        //cout << "load argu " << (*it).first << endl;
+        //cout << "into " << REGISTER[s_reg] << endl;
+        tmp_s += " lw " + string(REGISTER[s_reg]) + ", " + int_to_str(d->hi_ptr) + "($sp)  # load argument " + (*it).first + "\n";
+        sem.access_symtbl((*it).first)->rdest = s_reg; 
+        d->hi_ptr = d->hi_ptr - 4;
+
+      }
+      return tmp_s;
 }
  
-  void callee_restore() {
+  string callee_restore(method_descriptor *d) {
     
+    string tmp_s = "";
     // Put return value in $v0
-
+    if (d->return_type != T_VOID) {
+      
+    }
     // Restore callee-saved registers
     // Restore $s0-$s7
-    g_code.add(" lw $ra, 20($sp)\n");
-    g_code.add(" lw $fp, 16($sp)\n");
-    g_code.add(" addiu $sp, $sp, 32\n");
-    g_code.add(" jr $ra\n");
+    vector<int>::reverse_iterator it;
+    for (it = d->saved_regs.rbegin(); it != d->saved_regs.rend(); it++) {
+       tmp_s += " lw " + string(REGISTER[*it]) + ", " + int_to_str(d->lo_ptr) + "($sp)  # callee restore\n";
+       d->lo_ptr = d->lo_ptr - 4;
+    }
 
-    return;
+    tmp_s+= " lw $fp, " + int_to_str(d->stack_size - 8) + "($sp)\n";
+    tmp_s+= " lw $ra, " + int_to_str(d->stack_size - 4) + "($sp)\n";
+    tmp_s+= " addiu $sp, $sp, " + int_to_str(d->stack_size) + "\n";
+    tmp_s+= " jr $ra\n";
+
+    return tmp_s;
   }
 
-  void caller_save(string callee_name, vector<string> arglist) {
+  string caller_save(method_descriptor *caller, string callee_id) {
 
+    string tmp_s = "";
     // Pass arguments
-    for (int i = 0; i < arglist.size(); i++) {
-      // Place arguments
-    }
-
-    // Save $a0-$a3 and $t0->$t9
-    for (int i = A0; i <= A3; i++) {
-      // Save if non-empty
-    }
     for (int i = T0; i <= T9; i++) {
       // Save if non-empty
+      //if ( !regtbl[i].empty()) {
+        tmp_s += " sw " + string(REGISTER[i]) + ", " + int_to_str(caller->lo_ptr) + "($sp)  # caller save\n";
+        caller->saved_tmp.push_back(i);
+        caller->lo_ptr = caller->lo_ptr + 4;
+      //}
     }
-
+    caller->lo_ptr = caller->lo_ptr - 4;
     // jal to function
-    g_code.add(" j " + callee_name + "\n");
-
-    return;
+    tmp_s += " jal " + callee_id + "\n";
+    return tmp_s;
   }
 
-  void caller_restore() {
-    return;
+  string caller_restore(method_descriptor *caller) {
+    string tmp_s = "";
+    vector<int>::reverse_iterator it;
+    for (it = caller->saved_tmp.rbegin(); it != caller->saved_tmp.rend(); it++) {
+      tmp_s += " lw " + string(REGISTER[*it]) + ", " + int_to_str(caller->lo_ptr) + "($sp)  # caller restore\n";
+      caller->lo_ptr = caller->lo_ptr - 4;
+    }
+
+    return tmp_s;
   }
 
  
@@ -768,13 +804,26 @@ method_decl: T_VOID T_ID
     }
       T_LPAREN param_list T_RPAREN 
     {  
-      sem.enter_method(*$2, "void", $5->arglist);
+      sem.enter_method(*$2, T_VOID, $5->arglist);
       delete $5;
       block_owner = *$2;
-      // method_start_pos = 
+      tmp_pos = g_code.get_next_instr();
+
+      method_descriptor *d = sem.mtdtbl[*$2];
+      map<string, int>::iterator it;
+      for (it = d->args.begin(); it != d->args.end(); it++) {
+         // Put parameter name into symbol table
+         sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+      }
+
+      string tmp_s = callee_save(sem.mtdtbl[*$2]);
+      g_code.add(tmp_s);
     }  
       block
     {
+      string tmp_s = callee_restore(sem.mtdtbl[*$2]);
+      g_code.add(block_owner + "_return:\n");
+      g_code.add(tmp_s);
 	  	$$ = $8;
       //cout << block_owner << " " << sem.mtdtbl[block_owner]->var_count << endl;
       block_owner = "";
@@ -785,12 +834,26 @@ method_decl: T_VOID T_ID
     }
       T_LPAREN param_list T_RPAREN 
     {  
-      sem.enter_method(*$2, "int", $5->arglist);
+      sem.enter_method(*$2, T_INT, $5->arglist);
       delete $5;
       block_owner = *$2;
+      tmp_pos = g_code.get_next_instr();
+
+      method_descriptor *d = sem.mtdtbl[*$2];
+      map<string, int>::iterator it;
+      for (it = d->args.begin(); it != d->args.end(); it++) {
+         // Put parameter name into symbol table
+         sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+      }
+
+      string tmp_s = callee_save(sem.mtdtbl[*$2]);
+      g_code.add(tmp_s);
     }  
       block
     {
+      string tmp_s = callee_restore(sem.mtdtbl[*$2]);
+      g_code.add(block_owner + "_return:\n");
+      g_code.add(tmp_s);
       $$ = $8;
       //cout << block_owner << " " << sem.mtdtbl[block_owner]->var_count << endl;
       block_owner = "";
@@ -801,12 +864,26 @@ method_decl: T_VOID T_ID
     }
       T_LPAREN param_list T_RPAREN 
     {
-      sem.enter_method(*$2, "bool", $5->arglist);
+      sem.enter_method(*$2, T_BOOL, $5->arglist);
       delete $5;
       block_owner = *$2;
+      tmp_pos = g_code.get_next_instr();
+
+      method_descriptor *d = sem.mtdtbl[*$2];
+      map<string, int>::iterator it;
+      for (it = d->args.begin(); it != d->args.end(); it++) {
+         // Put parameter name into symbol table
+         sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+      }
+
+      string tmp_s = callee_save(sem.mtdtbl[*$2]);
+      g_code.add(tmp_s);
     }
       block
     {
+      string tmp_s = callee_restore(sem.mtdtbl[*$2]);
+      g_code.add(block_owner + "_return:\n");
+      g_code.add(tmp_s);
 		  $$ = $8;
       //cout << block_owner << " " << sem.mtdtbl[block_owner]->var_count << endl;
       block_owner = "";
@@ -827,13 +904,13 @@ param_list: param_comma_list
 param_comma_list: param T_COMMA param_comma_list
   {
     $$ = $3; 
-    $3->arglist[$1->lexeme] = $1->token;
+    $3->arglist[$1->lexeme] = $1->type;
     delete $1;
   }
      | param
   {
     attribute *pcl = new attribute;
-    pcl->arglist[$1->lexeme] = $1->token;
+    pcl->arglist[$1->lexeme] = $1->type;
     delete $1;
     $$ = pcl;
   }
@@ -842,7 +919,7 @@ param_comma_list: param T_COMMA param_comma_list
 param: T_INT T_ID
   {
     attribute *param = new attribute;
-    param->token = "int";
+    param->type = T_INT;
     param->lexeme = *$2;
     $$ = param;
     
@@ -850,7 +927,7 @@ param: T_INT T_ID
      | T_BOOL T_ID
   {
     attribute *param = new attribute;
-    param->token = "bool";
+    param->type = T_BOOL;
     param->lexeme = *$2;
     $$ = param;
   }
@@ -991,6 +1068,13 @@ statement: assign T_SEMICOLON
   }
      | T_RETURN opt_expr T_SEMICOLON
   {
+    if ($2->rdest != -1) {
+      g_code.add(" move $v0, " + string(REGISTER[$2->rdest]) + "  # move return value into $v0\n");
+    }
+      g_code.add(" j " + block_owner + "_return  #jump to callee_restore\n");
+      delete $2;
+    attribute *return_stmt = new attribute;
+    $$ = return_stmt;
   }
      | T_BREAK T_SEMICOLON
   {
@@ -1068,9 +1152,27 @@ assign: lvalue T_ASSIGN expr
     }
   }
 
-method_call: T_ID T_LPAREN expr_comma_list T_RPAREN
+method_call: T_ID 
+  {
+    tmp_pos = -12; 
+  }
+              T_LPAREN expr_comma_list T_RPAREN
   {	
-  
+    attribute *method_call = new attribute;
+    //cout << "start get rtype\n";
+    //method_call->type = sem.mtdtbl[*$1]->return_type;
+    //cout << "end get rtype\n";
+    $$ = method_call;
+    string tmp_s = "";
+    //cout << "caller_save\n";
+
+    tmp_s = caller_save(sem.mtdtbl[block_owner], *$1);  
+    g_code.add(tmp_s);
+
+    // Put arguments on callee's stack
+     
+    tmp_s = caller_restore(sem.mtdtbl[block_owner]);
+    g_code.add(tmp_s);
   }
            | T_CALLOUT T_LPAREN T_STRINGCONSTANT callout_arg_comma_list T_RPAREN
   {
@@ -1080,16 +1182,30 @@ method_call: T_ID T_LPAREN expr_comma_list T_RPAREN
 expr_comma_list: opt_expr
   {
   }
-     | expr T_COMMA expr_comma_list
+     | expr 
+  {
+     
+    g_code.add(" sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"); 
+    tmp_pos = tmp_pos - 4;
+  }
+      T_COMMA expr_comma_list
   {
   }
      ;
 
 opt_expr: expr
   {
+    g_code.add(" sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"); 
+    tmp_pos = tmp_pos - 4;
+    attribute *opt_expr = new attribute;
+    opt_expr->rdest = $1->rdest;
+    $$ = opt_expr;
   }
      | /* empty */ 
   {
+    attribute *opt_expr = new attribute;
+    opt_expr->rdest = -1;
+    $$ = opt_expr;
   }
      ;
 
@@ -1149,7 +1265,12 @@ expr: lvalue
   }
      | method_call
   {
-    $$ = $1;
+    attribute *expr = new attribute;
+    expr->rdest = V0;
+    //cout << "start get type\n";
+    //expr->type = $1->type; 
+    //cout << "end get type\n";
+    $$ = expr;
   }
      | constant
   {
