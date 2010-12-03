@@ -318,12 +318,14 @@
       reg::free_temp_reg(offset);
       lvalue->opcode_type = "none";
       lvalue->rdest = reg;
-
+      reg::free_temp_reg(offset);
     }
     return lvalue;
   }
 
 attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, attribute *right_expr) {
+  // cout << left_expr->lexeme << " type: " << left_expr->type << endl;
+  // cout << right_expr->lexeme << " type: " << right_expr->type << endl;
 	if(left_expr->type != right_expr->type){
 		if(string(op) != "!"){
 			cerr << "type mismatch between " << left_expr->lexeme << " and " << right_expr->lexeme << endl;
@@ -721,7 +723,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
       }
       else {
         //cout << "It's an array" << $2->array_size << endl;
-        g_code.global_decl.push_back($2->lexeme + ": .space " + $2->array_size + "\n");
+        g_code.global_decl.push_back($2->lexeme + ": .word 0:" + $2->array_size + "\n");
         sem.access_symtbl($2->lexeme)->array_length = atoi($2->array_size.c_str());
         //cout << "Array added to symtbl\n";
       }
@@ -737,7 +739,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
         g_code.global_decl.push_back($2->lexeme + ": .word 0\n");
       }
       else {
-        g_code.global_decl.push_back($2->lexeme + ": .space " + $2->array_size + "\n");
+        g_code.global_decl.push_back($2->lexeme + ": .word 0:" + $2->array_size + "\n");
         sem.access_symtbl($2->lexeme)->array_length = atoi($2->array_size.c_str());
       }
     }
@@ -799,7 +801,7 @@ field: T_ID
     {
       global_size += atoi($3->c_str()) * 4;
       $$ = field($1);
-      $$->array_size = int_to_str(global_size);
+      $$->array_size = int_to_str(global_size / 4);
        
     }
      ;
@@ -831,6 +833,7 @@ method_decl: T_VOID T_ID
       for (it = d->args.begin(); it != d->args.end(); it++) {
          // Put parameter name into symbol table
          sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+         //  cout << "PARAM TYPE: " << (*it).first << " " << (*it).second << endl;
       }
 
       string tmp_s = callee_save(sem.mtdtbl[*$2]);
@@ -860,7 +863,8 @@ method_decl: T_VOID T_ID
       map<string, int>::iterator it;
       for (it = d->args.begin(); it != d->args.end(); it++) {
          // Put parameter name into symbol table
-         sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+        sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+       // cout << "PARAM TYPE: " << (*it).first << " " << (*it).second << endl;
       }
 
       string tmp_s = callee_save(sem.mtdtbl[*$2]);
@@ -891,6 +895,7 @@ method_decl: T_VOID T_ID
       for (it = d->args.begin(); it != d->args.end(); it++) {
          // Put parameter name into symbol table
          sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+       // cout << "PARAM TYPE: " << (*it).first << " " << (*it).second << endl;
       }
 
       string tmp_s = callee_save(sem.mtdtbl[*$2]);
@@ -1177,7 +1182,7 @@ method_call: T_ID
   {	
     attribute *method_call = new attribute;
     //cout << "start get rtype\n";
-    //method_call->type = sem.mtdtbl[*$1]->return_type;
+    method_call->type = sem.mtdtbl[*$1]->return_type;
     //cout << "end get rtype\n";
     $$ = method_call;
     string tmp_s = "";
@@ -1185,10 +1190,11 @@ method_call: T_ID
 
     tmp_s = caller_save(sem.mtdtbl[block_owner], *$1);  
     g_code.add(tmp_s);
-
+    
     // Put arguments on callee's stack
-     
+    g_code.add($4->mipsCode); 
     tmp_s = caller_restore(sem.mtdtbl[block_owner]);
+    delete $4;
     g_code.add(tmp_s);
   }
            | T_CALLOUT T_LPAREN T_STRINGCONSTANT callout_arg_comma_list T_RPAREN
@@ -1198,23 +1204,30 @@ method_call: T_ID
 
 expr_comma_list: opt_expr
   {
+    $$ = $1;
   }
      | expr 
   {
      
-    g_code.add(" sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"); 
+    attribute *expr = new attribute;
+    expr->mipsCode = " sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"; 
+    $1 = expr;
     tmp_pos = tmp_pos - 4;
   }
       T_COMMA expr_comma_list
   {
+    attribute *expr_list = new attribute;
+    expr_list->mipsCode = $1->mipsCode + $4->mipsCode;
+    delete $1, $4;
+    $$ = expr_list;
   }
      ;
 
 opt_expr: expr
   {
-    g_code.add(" sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"); 
     tmp_pos = tmp_pos - 4;
     attribute *opt_expr = new attribute;
+    opt_expr->mipsCode = " sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"; 
     opt_expr->rdest = $1->rdest;
     $$ = opt_expr;
   }
@@ -1271,7 +1284,9 @@ lvalue: T_ID
     lvalue->token = string("lvalue");
     lvalue->lexeme = *$1;
     //cout << "lvalue " << *$1 << endl;
-    lvalue->array_index = $3->rdest; 
+    int tmp_reg = reg::get_temp_reg(-1, -1);
+    g_code.add(" move " + string(REGISTER[tmp_reg]) + ", " + string(REGISTER[$3->rdest]) + "\n");
+    lvalue->array_index = tmp_reg; 
     $$ = lvalue;
   }
      ;
@@ -1285,8 +1300,8 @@ expr: lvalue
     attribute *expr = new attribute;
     expr->rdest = V0;
     //cout << "start get type\n";
-    //expr->type = $1->type; 
-    //cout << "end get type\n";
+    expr->type = $1->type; 
+    // cout << "end get type " << $1->type << "\n";
     $$ = expr;
   }
      | constant
