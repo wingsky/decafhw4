@@ -6,5 +6,8 @@ then
 fi
 
 ./decafexpr-codegen < $1 > tmp.m
-spim -file tmp.m
-rm -f tmp.m
+if [ $? == 0 ]
+then
+	spim -file tmp.m
+	rm -f tmp.m
+fi
