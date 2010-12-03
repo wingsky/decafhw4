@@ -19,6 +19,8 @@ private:
 
 
 public:
+  vector<string> global_decl;
+
 	code(){
 		label_count = 0;
 	}
@@ -71,6 +73,10 @@ public:
 		for(map<string, string>::iterator i = str_constant_list.begin(); i != str_constant_list.end(); ++i){
 			s += i->second + string(" .asciiz ") + i->first + string("\n");
 		}
+    
+    for (vector<string>::iterator i = global_decl.begin(); i != global_decl.end(); i++) {
+      s += *i;
+    }
 
 		s += "\t.text\n";
 		for(vector<string>::iterator i = code_list.begin(); i != code_list.end(); ++i){
