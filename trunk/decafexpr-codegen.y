@@ -322,7 +322,7 @@ attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, 
 		cerr << "type mismatch between " << left_expr->lexeme << " and " << right_expr->lexeme << endl;
         throw runtime_error("type mismatch");
 	}
-	if(integer_op_set.find(op) !=integer_op_set.end()){
+	if(integer_op_set.find(op) != integer_op_set.end()){
 		if(left_expr->type != T_INT){
 			cerr << "operator " << op << " must only accept int type" << endl;
 			throw runtime_error("operator type error");
@@ -1236,6 +1236,7 @@ expr: lvalue
     attribute *imm = new attribute;
     imm->opcode_type = string("none");
     imm->rdest = ZERO;
+	imm->type = T_BOOL;
     $$ = binop_expr("seq", "!", $2, imm);
   }
      | T_LPAREN expr T_RPAREN
