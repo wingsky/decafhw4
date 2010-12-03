@@ -14,10 +14,10 @@
 
   using namespace std;
 
-  static const char* INTEGER_OP[] = {"+","-","*","/","<<",">>","rot","%","<",">","<=",">="};
-  static const char* BOOL_OP[] = {"&&", "||", "!"};
-  set<const char*> integer_op_set(INTEGER_OP, INTEGER_OP + sizeof(INTEGER_OP));
-  set<const char*> bool_op_set(BOOL_OP, BOOL_OP + sizeof(BOOL_OP));
+  const char* INTEGER_OP[] = {"+","-","*","/","<<",">>","rot","%","<",">","<=",">="};
+  const char* BOOL_OP[] = {"&&", "||", "!"};
+  set<const char*> integer_op_set(INTEGER_OP, INTEGER_OP + sizeof(INTEGER_OP)/sizeof(char*));
+  set<const char*> bool_op_set(BOOL_OP, BOOL_OP + sizeof(BOOL_OP)/sizeof(char*));
 
   semantics sem;
   code g_code;
@@ -325,18 +325,20 @@
 
 attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, attribute *right_expr) {
 	if(left_expr->type != right_expr->type){
-		cerr << "type mismatch between " << left_expr->lexeme << " and " << right_expr->lexeme << endl;
-        throw runtime_error("type mismatch");
+		if(string(op) != "!"){
+			cerr << "type mismatch between " << left_expr->lexeme << " and " << right_expr->lexeme << endl;
+			throw runtime_error("type mismatch");
+		}
 	}
 	if(integer_op_set.find(op) != integer_op_set.end()){
-		if(left_expr->type != T_INT){
-			cerr << "operator " << op << " must only accept int type" << endl;
+		if(left_expr->type != T_INT || right_expr->type != T_INT){
+			cerr << "operator " << op << " only accepts int type" << endl;
 			throw runtime_error("operator type error");
 		}
 	}
 	if(bool_op_set.find(op) != bool_op_set.end()){
-		if(left_expr->type != T_BOOL){
-			cerr << "operator " << op << " must only accept bool type" << endl;
+		if(left_expr->type != T_BOOL || right_expr->type != T_BOOL){
+			cerr << "operator " << op << " only accepts bool type" << endl;
 			throw runtime_error("operator type error");
 		}
 	}
@@ -645,7 +647,7 @@ string callee_save(method_descriptor *d) {
 
 %%
 
-start: program generate_label
+start: program 
   {
     //g_code.add(" jr $ra\n");
     
@@ -656,8 +658,10 @@ start: program generate_label
     */
     //cout << sem.final(*$1) << endl;
     // $1->printtree(0);
-	g_code.backpatch($1->next_list, $2);
-	delete $1, $2;
+	if(!($1->next_list.empty())){
+		g_code.backpatch($1->next_list, next_label());
+	}	
+	delete $1;
 
 	g_code.print();
 
@@ -1388,17 +1392,34 @@ constant: T_INTCONSTANT
   }
      | T_CHARCONSTANT
   {
-    $$ = constant($1, T_CHARCONSTANT);
+	attribute *constant = new attribute;
+    constant->lexeme = *$1;
+	constant->type = T_CHARCONSTANT;
+    $$ = constant;
+
+//    $$ = constant($1, T_CHARCONSTANT);
   }
      | T_TRUE
   {
-    string trueval("1");
-    $$ = constant(&trueval, T_BOOL);
+	attribute *constant = new attribute;
+    constant->lexeme = string("1");
+	constant->type = T_BOOL;
+    $$ = constant;
+
+
+    //string trueval("1");
+    //$$ = constant(&trueval, T_BOOL);
   }
      | T_FALSE
   {
-    string falseval("0");
-    $$ = constant(&falseval, T_BOOL);
+	attribute *constant = new attribute;
+    constant->lexeme = string("0");
+	constant->type = T_BOOL;
+    $$ = constant;
+
+
+    //string falseval("0");
+    //$$ = constant(&falseval, T_BOOL);
   }
      ;
 

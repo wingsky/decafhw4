@@ -34,8 +34,14 @@ public:
 	}
   
 	string next_str_label(string s){
-		string new_label = string(label_prefix) + int_to_str(++label_count);
-		str_constant_list.insert(pair<string, string>(s, new_label+string(":")));
+		string new_label;
+		map<string, string>::iterator it = str_constant_list.find(s);
+		if(it != str_constant_list.end()){
+			new_label = it->second;
+		}else{
+			new_label = string(label_prefix) + int_to_str(++label_count);
+			str_constant_list.insert(pair<string, string>(s, new_label));
+		}
 
 		return new_label;
 	}
@@ -71,7 +77,7 @@ public:
 		string s;
 		s += string("\t.data\n");
 		for(map<string, string>::iterator i = str_constant_list.begin(); i != str_constant_list.end(); ++i){
-			s += i->second + string(" .asciiz ") + i->first + string("\n");
+			s += i->second + string(": .asciiz ") + i->first + string("\n");
 		}
     
     for (vector<string>::iterator i = global_decl.begin(); i != global_decl.end(); i++) {
