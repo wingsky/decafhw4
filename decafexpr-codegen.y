@@ -23,6 +23,7 @@
   code g_code;
   string block_owner = "";
   int tmp_pos; 
+  long global_size = 0;
   long heap_offset = 0; 
   
   list<int> merge_list(list<int>& l, list<int>& r){
@@ -242,6 +243,11 @@
 		callout->opcode_type = "load";
 		callout->opcode = "move";
 		g_code.add(callout->asmcode());
+
+    if ((attr->rdest < T9) && (attr->rdest > T0)) {
+      reg::free_temp_reg(attr->rdest);
+    }
+
 	} else if(*callout_fn == "\"print_string\""){
 		//callout = new attribute;
 		g_code.add(" la " + string(REGISTER[A0]) + ", " + attr->lexeme + string("\n"));
@@ -654,6 +660,8 @@ start: program generate_label
 	delete $1, $2;
 
 	g_code.print();
+
+  //cout << "GLOBAL SIZE: " << global_size << endl;
   }
 
 program: T_CLASS class_name begin_block field_decl_list method_decl_list end_block
@@ -703,13 +711,13 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
-      g_code.add(".globl " + $2->lexeme + "\n");
+      g_code.global_decl.push_back(".globl " + $2->lexeme + "\n");
       if ($2->array_size == "") {
-        g_code.add($2->lexeme + ": .word 0\n");
+        g_code.global_decl.push_back($2->lexeme + ": .word 0\n");
       }
       else {
         //cout << "It's an array" << $2->array_size << endl;
-        g_code.add($2->lexeme + ": .space " + $2->array_size + "\n");
+        g_code.global_decl.push_back($2->lexeme + ": .space " + $2->array_size + "\n");
         sem.access_symtbl($2->lexeme)->array_length = atoi($2->array_size.c_str());
         //cout << "Array added to symtbl\n";
       }
@@ -720,12 +728,12 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
-      g_code.add(".globl " + $2->lexeme + "\n");
+      g_code.global_decl.push_back(".globl " + $2->lexeme + "\n");
       if ($2->array_size == "") {
-        g_code.add($2->lexeme + ": .word 0\n");
+        g_code.global_decl.push_back($2->lexeme + ": .word 0\n");
       }
       else {
-        g_code.add($2->lexeme + ": .space " + $2->array_size + "\n");
+        g_code.global_decl.push_back($2->lexeme + ": .space " + $2->array_size + "\n");
         sem.access_symtbl($2->lexeme)->array_length = atoi($2->array_size.c_str());
       }
     }
@@ -734,16 +742,18 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
       sem.enter_symtbl(*$2, T_INT, -1, *$2);
       sem.access_symtbl(*$2)->global = 1;
       // Address of the global variable is its name
-      g_code.add(".globl " + *$2 + "\n");
-      g_code.add(*$2 + ": .word " + $4->lexeme + "\n");
+      g_code.global_decl.push_back(".globl " + *$2 + "\n");
+      g_code.global_decl.push_back(*$2 + ": .word " + $4->lexeme + "\n");
+      global_size += 4;
     }
      | T_BOOL T_ID T_ASSIGN constant T_SEMICOLON
     {
       sem.enter_symtbl(*$2, T_BOOL, -1, *$2);
       sem.access_symtbl(*$2)->global = 1;
       // Address of the global variable is its name
-      g_code.add(".globl " + *$2 + "\n");
-      g_code.add(*$2 + ": .word " + $4->lexeme + "\n");
+      g_code.global_decl.push_back(".globl " + *$2 + "\n");
+      g_code.global_decl.push_back(*$2 + ": .word " + $4->lexeme + "\n");
+      global_size += 4;
     }
      ;
 
@@ -753,8 +763,8 @@ int_field_comma_list: T_COMMA field int_field_comma_list
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
-      g_code.add(".globl " + $2->lexeme + "\n");
-      g_code.add($2->lexeme + ": .word 0\n");
+      g_code.global_decl.push_back(".globl " + $2->lexeme + "\n");
+      g_code.global_decl.push_back($2->lexeme + ": .word 0\n");
     }
      | 
     {
@@ -767,8 +777,8 @@ bool_field_comma_list: T_COMMA field bool_field_comma_list
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
-      g_code.add(".globl " + $2->lexeme + "\n");
-      g_code.add($2->lexeme + ": .word 0\n");
+      g_code.global_decl.push_back(".globl " + $2->lexeme + "\n");
+      g_code.global_decl.push_back($2->lexeme + ": .word 0\n");
     }
      | 
     {
@@ -779,11 +789,14 @@ bool_field_comma_list: T_COMMA field bool_field_comma_list
 field: T_ID
     {
       $$ = field($1);
+      global_size += 4;
     }
      | T_ID T_LSB T_INTCONSTANT T_RSB
     {
+      global_size += atoi($3->c_str()) * 4;
       $$ = field($1);
-      $$->array_size = int_to_str(atoi($3->c_str()) * 4);
+      $$->array_size = int_to_str(global_size);
+       
     }
      ;
 
