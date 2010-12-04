@@ -16,7 +16,7 @@
 
   const char* INTEGER_OP[] = {"+","-","*","/","<<",">>","rot","%","<",">","<=",">="};
   const char* BOOL_OP[] = {"&&", "||", "!"};
-  const char* BOOL_RETURN_OP[] = {"<", ">", "<=", ">=", "&&", "||", "!"};
+  const char* BOOL_RETURN_OP[] = {"==", "!=", "<", ">", "<=", ">=", "&&", "||", "!"};
   set<const char*> integer_op_set(INTEGER_OP, INTEGER_OP + sizeof(INTEGER_OP)/sizeof(char*));
   set<const char*> bool_op_set(BOOL_OP, BOOL_OP + sizeof(BOOL_OP)/sizeof(char*));
   set<const char*> bool_return_op_set(BOOL_RETURN_OP, BOOL_RETURN_OP + sizeof(BOOL_RETURN_OP)/sizeof(char*));
@@ -344,8 +344,9 @@
   }
 
 attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, attribute *right_expr) {
-  // cout << left_expr->lexeme << " type: " << left_expr->type << endl;
-  // cout << right_expr->lexeme << " type: " << right_expr->type << endl;
+   //cout << "(" << left_expr->type << "  "<<left_expr->lexeme << ") ";
+   //cout << op;
+   //cout << " (" << right_expr->type << "  "<<right_expr->lexeme << ")\n";
 	if(left_expr->type != right_expr->type){
 		if(string(op) != "!"){
 			string err_msg = string("type mismatch between ") + left_expr->lexeme + string(" and ") + right_expr->lexeme + string("\n");
@@ -378,6 +379,7 @@ attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, 
 	} else{
 		expr->type = T_INT;
 	}
+	//cout << "result type: " << expr->type << endl;
     expr->opcode_type = "reuse";
 /*
     if ((left_expr->rdest == "") || (left_expr->opcode_type != "none")) {
