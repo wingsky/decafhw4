@@ -516,9 +516,9 @@ string callee_save(method_descriptor *d) {
       d->lo_ptr = d->lo_ptr - 4;
       
       // Put arguments into registers
-      map<string, int>::iterator it;
+      map<string, int>::reverse_iterator it;
       int s_reg;
-      for( it = d->args.begin(); it != d->args.end(); it++) {
+      for( it = d->args.rbegin(); it != d->args.rend(); it++) {
         s_reg = reg::get_empty_reg((*it).first);
         //cout << "load argu " << (*it).first << endl;
         //cout << "into " << REGISTER[s_reg] << endl;
