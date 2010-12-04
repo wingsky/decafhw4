@@ -861,15 +861,11 @@ field: T_ID
 method_decl_list: method_decl_list method_decl
 	{
 		$$ = combine($2, $1);
-		if(!($2->next_list.empty())){
-			g_code.backpatch($2->next_list, next_label());
-		}
+
 	}
      | method_decl
 	{
-		if(!($1->next_list.empty())){
-			g_code.backpatch($1->next_list, next_label());
-		}
+
 		$$ = $1;
 	}
      ;
@@ -900,10 +896,14 @@ method_decl: T_VOID T_ID
       block
     {
       string tmp_s = callee_restore(sem.mtdtbl[*$2]);
-      g_code.add(block_owner + "_return:\n");
+      string return_label = block_owner + "_return";
+      g_code.add(return_label + ":\n");
       g_code.add(tmp_s);
-	  	$$ = $8;
+      $$ = $8;
       //cout << block_owner << " " << sem.mtdtbl[block_owner]->var_count << endl;
+      if(!($8->next_list.empty())){
+			  g_code.backpatch($8->next_list, &(return_label));
+	  	}
       block_owner = "";
     }
      | T_INT T_ID
@@ -931,10 +931,14 @@ method_decl: T_VOID T_ID
       block
     {
       string tmp_s = callee_restore(sem.mtdtbl[*$2]);
-      g_code.add(block_owner + "_return:\n");
+      string return_label = block_owner + "_return";
+      g_code.add(return_label + ":\n");
       g_code.add(tmp_s);
       $$ = $8;
       //cout << block_owner << " " << sem.mtdtbl[block_owner]->var_count << endl;
+      if(!($8->next_list.empty())){
+			  g_code.backpatch($8->next_list, &(return_label));
+	  	}
       block_owner = "";
     }
      | T_BOOL T_ID 
@@ -962,10 +966,14 @@ method_decl: T_VOID T_ID
       block
     {
       string tmp_s = callee_restore(sem.mtdtbl[*$2]);
-      g_code.add(block_owner + "_return:\n");
+      string return_label = block_owner + "_return";
+      g_code.add(return_label + ":\n");
       g_code.add(tmp_s);
-		  $$ = $8;
+      $$ = $8;
       //cout << block_owner << " " << sem.mtdtbl[block_owner]->var_count << endl;
+      if(!($8->next_list.empty())){
+			  g_code.backpatch($8->next_list, &(return_label));
+	  	}
       block_owner = "";
     }
      ;
