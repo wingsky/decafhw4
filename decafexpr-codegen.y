@@ -16,8 +16,10 @@
 
   const char* INTEGER_OP[] = {"+","-","*","/","<<",">>","rot","%","<",">","<=",">="};
   const char* BOOL_OP[] = {"&&", "||", "!"};
+  const char* BOOL_RETURN_OP[] = {"<", ">", "<=", ">=", "&&", "||", "!"};
   set<const char*> integer_op_set(INTEGER_OP, INTEGER_OP + sizeof(INTEGER_OP)/sizeof(char*));
   set<const char*> bool_op_set(BOOL_OP, BOOL_OP + sizeof(BOOL_OP)/sizeof(char*));
+  set<const char*> bool_return_op_set(BOOL_RETURN_OP, BOOL_RETURN_OP + sizeof(BOOL_RETURN_OP)/sizeof(char*));
 
   semantics sem;
   code g_code;
@@ -368,8 +370,14 @@ attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, 
 			err(err_msg, err_type);
 		}
 	}
-    attribute *expr = new attribute;
-	expr->type = left_expr->type;
+    
+	attribute *expr = new attribute;
+
+	if(bool_return_op_set.find(op) != bool_return_op_set.end()){
+		expr->type = T_BOOL;
+	} else{
+		expr->type = T_INT;
+	}
     expr->opcode_type = "reuse";
 /*
     if ((left_expr->rdest == "") || (left_expr->opcode_type != "none")) {
@@ -407,7 +415,7 @@ attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, 
     return expr;
 }
 
-attribute *unary_expr(const char *opcode, attribute *attr) {
+attribute *unary_expr(const char *opcode, const char* op, attribute *attr) {
     attribute *unary_expr = new attribute;
 /*
     if (attr->rdest == -1) {
@@ -416,6 +424,13 @@ attribute *unary_expr(const char *opcode, attribute *attr) {
       attr->result_register(attr_reg);
     }
 */
+	if(attr->type != T_INT){
+		string err_msg = "operator " + string(op) + " only accepts int type\n";
+		string err_type = "operator type error";
+
+		err(err_msg, err_type);
+	}
+	unary_expr->type = attr->type;
     unary_expr->rdest = reg::get_temp_reg(attr->rdest, attr->rdest);
     unary_expr->rsrc = attr->rdest;
 
@@ -1410,7 +1425,7 @@ expr: lvalue
   }
      | T_MINUS expr %prec UMINUS 
   {
-    $$ = unary_expr("neg", $2);
+    $$ = unary_expr("neg", "-", $2);
   }
      | T_NOT expr
   {
