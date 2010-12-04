@@ -11,7 +11,7 @@ class method_descriptor {
 public:
   string method_id;
   int return_type;
-  map<string, int> args;   // map<id, type>
+  vector< pair<string, int> > args; //<id, type>
   int var_count;
   vector<int> saved_regs;
   vector<int> saved_tmp;
@@ -19,7 +19,7 @@ public:
   int lo_ptr;
   int stack_size;
   // Initialize
-  method_descriptor(string name, int r_type, map<string, int> arglist) {
+  method_descriptor(string name, int r_type, vector< pair<string, int> > arglist) {
 
     method_id = name;
     return_type = r_type;

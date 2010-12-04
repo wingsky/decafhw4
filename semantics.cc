@@ -79,7 +79,7 @@ public:
     symbol_register_list.pop_front();
   }
 
-  void enter_method(string name, int r_type, map<string, int> arg) {
+  void enter_method(string name, int r_type, vector< pair<string, int> > arg) {
     
     method_descriptor* d = new method_descriptor(name, r_type, arg);
     mtdtbl[name] = d;

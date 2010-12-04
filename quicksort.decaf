@@ -29,8 +29,9 @@ class QuickSort {
 		temp = list[leftPtr];
 		list[leftPtr] = list[rightPtr];
 		list[rightPtr] = temp;
+		
 	}
-		int partition(int left, int right, int pivot) {
+	int partition(int left, int right, int pivot) {
 	
 		int leftPtr;
 		int rightPtr;
@@ -66,8 +67,13 @@ class QuickSort {
 	}
 	
 	void quickSort(int left, int right) {
-	
+		//callout("print_string","in qs\n");
 		if (right - left <= 0) {
+			//callout("print_int",right-left);
+			//cr();
+			//callout("print_int",right-left<=0);
+			//cr();
+			//callout("print_string","return qs\n");
 			return;
 		} else {
 			int pivot, part;
@@ -80,14 +86,14 @@ class QuickSort {
 	
 	void main() {
 		int size;
-		size = 100;
+		size = 10;
 		initList(size);
 
-		displayList(0,size);
+		displayList(0,100);
 		quickSort(0,size-1);
-
+		//swap(0,2);
 		callout("print_string","After sorting:\n");
-		displayList(0,size);
+		displayList(0,100);
 	}
 
 
