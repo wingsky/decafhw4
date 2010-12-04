@@ -27,6 +27,7 @@
   int tmp_pos; 
   long global_size = 0;
   long heap_offset = 0; 
+  bool param_set = 0; 
   
 
   list<int> merge_list(list<int>& l, list<int>& r){
@@ -516,7 +517,7 @@ string callee_save(method_descriptor *d) {
       d->lo_ptr = d->lo_ptr - 4;
       
       // Put arguments into registers
-      map<string, int>::reverse_iterator it;
+      vector< pair<string, int> >::reverse_iterator it;
       int s_reg;
       for( it = d->args.rbegin(); it != d->args.rend(); it++) {
         s_reg = reg::get_empty_reg((*it).first);
@@ -729,9 +730,9 @@ program: T_CLASS class_name begin_block field_decl_list method_decl_list end_blo
   }
      | T_CLASS class_name begin_block field_decl_list end_block
   {
+    
   }
      ;
-
 class_name: T_ID
   {
   }
@@ -747,7 +748,12 @@ block: begin_block var_decl_list
 
 begin_block: T_LCB
   {
-    sem.new_symtbl();
+    if (param_set == 0) {
+      sem.new_symtbl();
+    }
+    else {
+      param_set = 0;
+    }
   }
 
 end_block: T_RCB
@@ -882,8 +888,12 @@ method_decl: T_VOID T_ID
       block_owner = *$2;
       tmp_pos = g_code.get_next_instr();
 
+      // symtbl in middle layers
+      sem.new_symtbl();
+      param_set = 1; 
+
       method_descriptor *d = sem.mtdtbl[*$2];
-      map<string, int>::iterator it;
+      vector< pair<string, int> >::iterator it;
       for (it = d->args.begin(); it != d->args.end(); it++) {
          // Put parameter name into symbol table
          sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
@@ -905,6 +915,7 @@ method_decl: T_VOID T_ID
 			  g_code.backpatch($8->next_list, &(return_label));
 	  	}
       block_owner = "";
+
     }
      | T_INT T_ID
     {
@@ -917,8 +928,12 @@ method_decl: T_VOID T_ID
       block_owner = *$2;
       tmp_pos = g_code.get_next_instr();
 
+      // symtbl in middle layer
+      sem.new_symtbl();
+      param_set = 1;
+
       method_descriptor *d = sem.mtdtbl[*$2];
-      map<string, int>::iterator it;
+      vector< pair<string, int> >::iterator it;
       for (it = d->args.begin(); it != d->args.end(); it++) {
          // Put parameter name into symbol table
         sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
@@ -940,6 +955,7 @@ method_decl: T_VOID T_ID
 			  g_code.backpatch($8->next_list, &(return_label));
 	  	}
       block_owner = "";
+
     }
      | T_BOOL T_ID 
     {
@@ -952,14 +968,19 @@ method_decl: T_VOID T_ID
       block_owner = *$2;
       tmp_pos = g_code.get_next_instr();
 
+      // symtbl in middle layer
+      sem.new_symtbl();
+      param_set = 1;
+
       method_descriptor *d = sem.mtdtbl[*$2];
-      map<string, int>::iterator it;
+      vector< pair<string, int> >::iterator it;
       for (it = d->args.begin(); it != d->args.end(); it++) {
          // Put parameter name into symbol table
          sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
        // cout << "PARAM TYPE: " << (*it).first << " " << (*it).second << endl;
       }
 
+      
       string tmp_s = callee_save(sem.mtdtbl[*$2]);
       g_code.add(tmp_s);
     }
@@ -975,12 +996,22 @@ method_decl: T_VOID T_ID
 			  g_code.backpatch($8->next_list, &(return_label));
 	  	}
       block_owner = "";
+
     }
      ;
 
 param_list: param_comma_list
   {
     $$ = $1; 
+/*
+    vector< pair<string, int> >::iterator it;
+    cout << "param enter order: \n";
+    for (it = $$->arglist.begin(); it != $$->arglist.end(); it++) {
+       // Put parameter name into symbol table
+       cout << (*it).first << " " << (*it).second << endl; 
+     // cout << "PARAM TYPE: " << (*it).first << " " << (*it).second << endl;
+    }
+*/
   }
      | /* empty */
   {
@@ -992,13 +1023,13 @@ param_list: param_comma_list
 param_comma_list: param T_COMMA param_comma_list
   {
     $$ = $3; 
-    $3->arglist[$1->lexeme] = $1->type;
+    $3->arglist.push_back(pair<string, int>($1->lexeme, $1->type));
     delete $1;
   }
      | param
   {
     attribute *pcl = new attribute;
-    pcl->arglist[$1->lexeme] = $1->type;
+    pcl->arglist.push_back(pair<string, int>($1->lexeme, $1->type));
     delete $1;
     $$ = pcl;
   }

@@ -53,7 +53,7 @@ public:
   int type;
 
 
-  map<string, int> arglist;
+  vector< pair<string, int> > arglist;
 
   int inherited; // non-zero means this attribute is inherited
 
