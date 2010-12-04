@@ -86,7 +86,7 @@ class QuickSort {
 	
 	void main() {
 		int size;
-		size = 10;
+		size = 80;
 		initList(size);
 
 		displayList(0,100);
