@@ -7,11 +7,13 @@
 #include <cstdlib>
 #include <iostream>
 
-  using namespace std;
-  
-  int lineno = 0;
-  int tokenpos = 0;
 
+  using namespace std;
+
+  int lineno = 1;
+  int tokenpos = 1;
+ 
+  
   string *preterm(const char* token, const char* lexeme) {
     string *preterm = new string(lexeme);
     return preterm;
