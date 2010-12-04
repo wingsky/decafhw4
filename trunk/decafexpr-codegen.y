@@ -34,6 +34,11 @@
 	return new_list;
   }
 
+  void err(string err_msg, string err_type){
+	cerr << "Line: " << lineno << " - "<< err_msg;
+    throw runtime_error(err_type.c_str());
+  }
+
   
 
   attribute *constant(string *immvalue, int type) {
@@ -163,8 +168,9 @@
     int reg;
 
 	if(d->type != expr->type){
-		cerr << "type mismatch between when assign value to variable '" << attr->lexeme << "'" << endl;
-        throw runtime_error("type mismatch");
+		string err_msg = string("type mismatch between when assign value to variable '") + attr->lexeme + string("'\n");
+		string err_type = string("type mismatch");
+		err(err_msg, err_type);
 	}
     if (d != NULL) {
       if ((d->rdest == -1)) {
@@ -174,8 +180,9 @@
         reg = d->rdest;
       }
     } else {
-      cerr << "variable " << attr->lexeme << " used before it was defined" << endl;
-      throw runtime_error("variable not in symbol table");
+	  string err_msg = string("variable ") + attr->lexeme + string(" used before it was defined\n");
+	  string err_type = string("variable not in symbol table");
+	  err(err_msg, err_type);
     }
 
     attribute *assign = new attribute;
@@ -203,11 +210,13 @@
     if (*callout_fn == "\"print_int\""){
       syscall_setup->imm = "1";
 	  if(attr == NULL){
-		cerr << "callout function " << *callout_fn << " should have a second argument!" << endl;
-		throw runtime_error("callout function missing argument");
+		string err_msg =  string("callout function ") + *callout_fn + string(" should have a second argument!\n");
+		string err_type("callout function missing argument");
+		err(err_msg, err_type);
 	  }else if(attr->token == "stringconst"){
-		cerr << "callout function " << *callout_fn << "'s second argument must be expression!'" << endl;
-		throw runtime_error("callout function wrong argument type");
+		string err_msg = string("callout function ") + *callout_fn + string("'s second argument must be expression!'\n");
+		string err_type("callout function wrong argument type");
+		err(err_msg, err_type);
 	  }
 
 	}
@@ -216,17 +225,23 @@
     else if (*callout_fn == "\"print_string\""){
       syscall_setup->imm = "4";
 	  if(attr == NULL){
-		cerr << "callout function " << *callout_fn << " should have a second argument!" << endl;
-		throw runtime_error("callout function missing argument");
+		string err_msg = string("callout function ") + *callout_fn + string(" should have a second argument!\n");
+		string err_type = string("callout function missing argument");
+
+		err(err_msg, err_type);
 	  } else if(attr->token != "stringconst"){
-		cerr << "callout function " << *callout_fn << "'s second argument must be string constant!'" << endl;
-		throw runtime_error("callout function wrong argument type");
+		string err_msg = string("callout function ") + *callout_fn + string("'s second argument must be string constant!'\n");
+		string err_type("callout function wrong argument type");
+
+		err(err_msg, err_type);
 	  }
 	}
 
     if (syscall_setup->imm == "_ERROR_") {
-      cerr << "callout function " << *callout_fn << " is not supported" << endl;
-      throw runtime_error("callout function not supported");
+      string err_msg = string("callout function ") + *callout_fn + string(" is not supported\n");
+      string err_type("callout function not supported");
+
+	  err(err_msg, err_type);
     }
 
 
@@ -277,8 +292,10 @@
 	int type;
 	
 	if(d == NULL){
-		cerr << "variable " << token->lexeme << " used before it was defined" << endl;
-        throw runtime_error("variable not in symbol table");
+		string err_msg = string("variable ") + token->lexeme + string(" used before it was defined\n");
+        string err_type("variable not in symbol table");
+
+		err(err_msg, err_type);
 	}
    
     attribute *lvalue = new attribute;
@@ -329,20 +346,26 @@ attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, 
   // cout << right_expr->lexeme << " type: " << right_expr->type << endl;
 	if(left_expr->type != right_expr->type){
 		if(string(op) != "!"){
-			cerr << "type mismatch between " << left_expr->lexeme << " and " << right_expr->lexeme << endl;
-			throw runtime_error("type mismatch");
+			string err_msg = string("type mismatch between ") + left_expr->lexeme + string(" and ") + right_expr->lexeme + string("\n");
+			string err_type("type mismatch");
+
+			err(err_msg, err_type);
 		}
 	}
 	if(integer_op_set.find(op) != integer_op_set.end()){
 		if(left_expr->type != T_INT || right_expr->type != T_INT){
-			cerr << "operator " << op << " only accepts int type" << endl;
-			throw runtime_error("operator type error");
+			string err_msg = string("operator ") + op + string(" only accepts int type\n");
+			string err_type("operator type error");
+
+			err(err_msg, err_type);
 		}
 	}
 	if(bool_op_set.find(op) != bool_op_set.end()){
 		if(left_expr->type != T_BOOL || right_expr->type != T_BOOL){
-			cerr << "operator " << op << " only accepts bool type" << endl;
-			throw runtime_error("operator type error");
+			string err_msg = string("operator ") + op + string(" only accepts bool type\n");
+			string err_type("operator type error");
+
+			err(err_msg, err_type);
 		}
 	}
     attribute *expr = new attribute;
@@ -534,6 +557,7 @@ string callee_save(method_descriptor *d) {
     return tmp_s;
   }
 
+ 
  
 %}
 
