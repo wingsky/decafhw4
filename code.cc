@@ -52,7 +52,7 @@ public:
 		code_list.push_back(c);
 		//print();
 		//cout << endl;
-    //cout << c << endl;
+    cout << c << endl;
 	}
 
   void insert(int pos, const string& c) {
