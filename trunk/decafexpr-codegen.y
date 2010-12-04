@@ -492,6 +492,7 @@ string callee_save(method_descriptor *d) {
       int var_count = d->var_count;
       int arg_count = d->args.size();
       d->stack_size = (18 + 2 + arg_count) * 4; // $t + $s + $ra + $fp + arguments
+      d->original_stack_size = d->stack_size;
       if ((d->stack_size % 8) != 0) {
         d->stack_size = d->stack_size + 4;
       }
@@ -502,18 +503,19 @@ string callee_save(method_descriptor *d) {
       // Set its $fp
       tmp_s += " addiu $fp, $sp, " + int_to_str(d->stack_size - 4) + "\n";
 
-      d->hi_ptr = d->stack_size - 12;
-      d->lo_ptr = 0;
+      d->hi_ptr = -8;
+      d->lo_ptr = -(d->stack_size - 4);
 
       for (int i = S0; i <= S7; i++) {
         // Save to stack if s is not empty
         //if ( !regtbl[i].empty()) {
-          tmp_s += " sw " + string(REGISTER[i]) + ", " + int_to_str(d->lo_ptr) + "($sp)  # callee save\n";  
+          tmp_s += " sw " + string(REGISTER[i]) + ", " + int_to_str(d->lo_ptr) + "($fp)  # callee save\n";  
           d->saved_regs.push_back(i);
           d->lo_ptr = d->lo_ptr + 4;
           regtbl[i].clear();
         //}
       }
+      //cout << d->method_id << " " << d->lo_ptr << endl;
       d->lo_ptr = d->lo_ptr - 4;
       
       // Put arguments into registers
@@ -523,11 +525,12 @@ string callee_save(method_descriptor *d) {
         s_reg = reg::get_empty_reg((*it).first);
         //cout << "load argu " << (*it).first << endl;
         //cout << "into " << REGISTER[s_reg] << endl;
-        tmp_s += " lw " + string(REGISTER[s_reg]) + ", " + int_to_str(d->hi_ptr) + "($sp)  # load argument " + (*it).first + "\n";
+        tmp_s += " lw " + string(REGISTER[s_reg]) + ", " + int_to_str(d->hi_ptr) + "($fp)  # load argument " + (*it).first + "\n";
         sem.access_symtbl((*it).first)->rdest = s_reg; 
         d->hi_ptr = d->hi_ptr - 4;
 
       }
+        d->hi_ptr = d->hi_ptr + 4;
       return tmp_s;
 }
  
@@ -541,15 +544,16 @@ string callee_save(method_descriptor *d) {
     // Restore callee-saved registers
     // Restore $s0-$s7
     vector<int>::reverse_iterator it;
+    //d->lo_ptr -= 4; 
     for (it = d->saved_regs.rbegin(); it != d->saved_regs.rend(); it++) {
-       tmp_s += " lw " + string(REGISTER[*it]) + ", " + int_to_str(d->lo_ptr) + "($sp)  # callee restore\n";
+       tmp_s += " lw " + string(REGISTER[*it]) + ", " + int_to_str(d->lo_ptr) + "($fp)  # callee restore\n";
        d->lo_ptr = d->lo_ptr - 4;
     }
     d->lo_ptr += 4;
     d->saved_regs.clear();
 
-    tmp_s+= " lw $fp, " + int_to_str(d->stack_size - 8) + "($sp)\n";
-    tmp_s+= " lw $ra, " + int_to_str(d->stack_size - 4) + "($sp)\n";
+    tmp_s+= " lw $ra, 0($fp)\n";
+    tmp_s+= " lw $fp, -4($fp)\n";
     tmp_s+= " addiu $sp, $sp, " + int_to_str(d->stack_size) + "\n";
     tmp_s+= " jr $ra\n";
 
@@ -560,10 +564,11 @@ string callee_save(method_descriptor *d) {
 
     string tmp_s = "";
     // Pass arguments
+    caller->lo_ptr += 4;
     for (int i = T0; i <= T9; i++) {
       // Save if non-empty
       //if ( !regtbl[i].empty()) {
-        tmp_s += " sw " + string(REGISTER[i]) + ", " + int_to_str(caller->lo_ptr) + "($sp)  # caller save\n";
+        tmp_s += " sw " + string(REGISTER[i]) + ", " + int_to_str(caller->lo_ptr) + "($fp)  # caller save\n";
         caller->saved_tmp.push_back(i);
         caller->lo_ptr = caller->lo_ptr + 4;
       //}
@@ -577,10 +582,10 @@ string callee_save(method_descriptor *d) {
     string tmp_s = "";
     vector<int>::reverse_iterator it;
     for (it = caller->saved_tmp.rbegin(); it != caller->saved_tmp.rend(); it++) {
-      tmp_s += " lw " + string(REGISTER[*it]) + ", " + int_to_str(caller->lo_ptr) + "($sp)  # caller restore\n";
+      tmp_s += " lw " + string(REGISTER[*it]) + ", " + int_to_str(caller->lo_ptr) + "($fp)  # caller restore\n";
       caller->lo_ptr = caller->lo_ptr - 4;
     }
-    caller->lo_ptr += 4;
+    //caller->lo_ptr += 4;
     caller->saved_tmp.clear();
     return tmp_s;
   }
@@ -1273,7 +1278,8 @@ assign: lvalue T_ASSIGN expr
 
 method_call: T_ID 
   {
-    tmp_pos = -12; 
+    tmp_pos = -(sem.mtdtbl[block_owner]->stack_size + 8); 
+    //cout << block_owner << "stack size " << tmp_pos << endl;
   }
               T_LPAREN expr_comma_list T_RPAREN
   {	
@@ -1308,7 +1314,7 @@ expr_comma_list: opt_expr
   {
      
     attribute *expr = new attribute;
-    expr->mipsCode = " sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"; 
+    expr->mipsCode = " sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($fp)  #pass argument\n"; 
     $1 = expr;
     tmp_pos = tmp_pos - 4;
     reg::free_temp_reg($1->rdest);
@@ -1325,7 +1331,7 @@ expr_comma_list: opt_expr
 opt_expr: expr
   {
     attribute *opt_expr = new attribute;
-    opt_expr->mipsCode = " sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"; 
+    opt_expr->mipsCode = " sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($fp)  #pass argument\n"; 
     opt_expr->rdest = $1->rdest;
     tmp_pos = tmp_pos - 4;
     reg::free_temp_reg($1->rdest);

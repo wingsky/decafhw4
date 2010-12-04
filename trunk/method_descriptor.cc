@@ -18,6 +18,7 @@ public:
   int hi_ptr;
   int lo_ptr;
   int stack_size;
+  int original_stack_size;
   // Initialize
   method_descriptor(string name, int r_type, vector< pair<string, int> > arglist) {
 
