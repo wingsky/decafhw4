@@ -861,6 +861,9 @@ field: T_ID
 method_decl_list: method_decl_list method_decl
 	{
 		$$ = combine($2, $1);
+		if(!($2->next_list.empty())){
+			g_code.backpatch($2->next_list, next_label());
+		}
 	}
      | method_decl
 	{
