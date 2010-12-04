@@ -128,6 +128,7 @@
 	while_stmt->add_child(*expr);
 	while_stmt->add_child(*block);
 
+  reg::free_temp_reg(expr->rdest);
 	return while_stmt;
   }
 
@@ -140,6 +141,7 @@
 	for_stmt->add_child(*assign_comma_list2);
 	for_stmt->add_child(*block);
 
+  reg::free_temp_reg(expr->rdest);
 	return for_stmt;
   }
 
@@ -149,7 +151,8 @@
 	if_else->opcode_type = "none";
 	if_else->add_child(*expr);
 	if_else->add_child(*block);
-
+  
+  reg::free_temp_reg(expr->rdest);
 	return if_else;
   }
   
@@ -161,6 +164,7 @@
 	if_else->add_child(*block1);
 	if_else->add_child(*block2);
 
+  reg::free_temp_reg(expr->rdest);
 	return if_else;
   }
 
@@ -405,8 +409,12 @@ attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, 
     expr->add_child(*left_expr);
     expr->add_child(*right_expr);
     DEBUG(expr->print("expr"));
-	g_code.add(expr->asmcode());
-
+	  if (string(opcode) != "rot") {
+      g_code.add(expr->asmcode());
+    }
+    else {
+      
+    }
     if (left_expr->rdest != expr->rdest) {
       reg::free_temp_reg(left_expr->rdest);
     }
@@ -505,7 +513,7 @@ string callee_save(method_descriptor *d) {
           regtbl[i].clear();
         //}
       }
-      //d->lo_ptr = d->lo_ptr - 4;
+      d->lo_ptr = d->lo_ptr - 4;
       
       // Put arguments into registers
       map<string, int>::iterator it;
@@ -536,6 +544,8 @@ string callee_save(method_descriptor *d) {
        tmp_s += " lw " + string(REGISTER[*it]) + ", " + int_to_str(d->lo_ptr) + "($sp)  # callee restore\n";
        d->lo_ptr = d->lo_ptr - 4;
     }
+    d->lo_ptr += 4;
+    d->saved_regs.clear();
 
     tmp_s+= " lw $fp, " + int_to_str(d->stack_size - 8) + "($sp)\n";
     tmp_s+= " lw $ra, " + int_to_str(d->stack_size - 4) + "($sp)\n";
@@ -559,7 +569,6 @@ string callee_save(method_descriptor *d) {
     }
     caller->lo_ptr = caller->lo_ptr - 4;
     // jal to function
-    tmp_s += " jal " + callee_id + "\n";
     return tmp_s;
   }
 
@@ -570,7 +579,8 @@ string callee_save(method_descriptor *d) {
       tmp_s += " lw " + string(REGISTER[*it]) + ", " + int_to_str(caller->lo_ptr) + "($sp)  # caller restore\n";
       caller->lo_ptr = caller->lo_ptr - 4;
     }
-
+    caller->lo_ptr += 4;
+    caller->saved_tmp.clear();
     return tmp_s;
   }
 
@@ -1235,9 +1245,10 @@ method_call: T_ID
 
     tmp_s = caller_save(sem.mtdtbl[block_owner], *$1);  
     g_code.add(tmp_s);
-    
+     
     // Put arguments on callee's stack
     g_code.add($4->mipsCode); 
+    g_code.add(" jal " + *$1 + "\n");
     tmp_s = caller_restore(sem.mtdtbl[block_owner]);
     delete $4;
     g_code.add(tmp_s);
@@ -1258,6 +1269,7 @@ expr_comma_list: opt_expr
     expr->mipsCode = " sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"; 
     $1 = expr;
     tmp_pos = tmp_pos - 4;
+    reg::free_temp_reg($1->rdest);
   }
       T_COMMA expr_comma_list
   {
@@ -1270,10 +1282,11 @@ expr_comma_list: opt_expr
 
 opt_expr: expr
   {
-    tmp_pos = tmp_pos - 4;
     attribute *opt_expr = new attribute;
     opt_expr->mipsCode = " sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($sp)  #pass argument\n"; 
     opt_expr->rdest = $1->rdest;
+    tmp_pos = tmp_pos - 4;
+    reg::free_temp_reg($1->rdest);
     $$ = opt_expr;
   }
      | /* empty */ 
@@ -1343,7 +1356,9 @@ expr: lvalue
      | method_call
   {
     attribute *expr = new attribute;
-    expr->rdest = V0;
+    int tmp_reg = reg::get_temp_reg(-1, -1);
+    g_code.add(" move " + string(REGISTER[tmp_reg]) + ", $v0  # move return value to t reg\n");
+    expr->rdest = tmp_reg;
     //cout << "start get type\n";
     expr->type = $1->type; 
     // cout << "end get type " << $1->type << "\n";
@@ -1381,6 +1396,7 @@ expr: lvalue
   }
      | expr T_ROT expr
   {
+    
     // this should include either a mod instruction or a branch,
     // removed the correct implementation here due to overlap with hw4
     if ($3->opcode == "neg") {
