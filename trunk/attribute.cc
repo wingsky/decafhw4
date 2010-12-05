@@ -75,6 +75,7 @@ public:
     address = "";
     function_label = "";
     mipsCode = "";
+	roll_back_label = "";
 
     inherited = 0;
 	type = -1;

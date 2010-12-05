@@ -144,7 +144,7 @@
 	for_stmt->add_child(*assign_comma_list2);
 	for_stmt->add_child(*block);
 
-  reg::free_temp_reg(expr->rdest);
+  //reg::free_temp_reg(expr->rdest);
 	return for_stmt;
   }
 
@@ -155,7 +155,7 @@
 	if_else->add_child(*expr);
 	if_else->add_child(*block);
   
-  reg::free_temp_reg(expr->rdest);
+  //reg::free_temp_reg(expr->rdest);
 	return if_else;
   }
   
@@ -1228,15 +1228,15 @@ statement: assign T_SEMICOLON
 	$$->break_list.merge($6->break_list);
 	$$->continue_list.merge($6->continue_list);
   }
-     | T_WHILE begin_expr T_LPAREN expr T_RPAREN end_expr block
+     | T_WHILE begin_expr T_LPAREN expr {reg::free_temp_reg($4->rdest);} T_RPAREN end_expr block
   {
-	$$ = while_stmt($4, $7);
+	$$ = while_stmt($4, $8);
 
-	g_code.get($6) = string(" beq ") + REGISTER[$4->rdest] + string(" $zero _\n");
-	g_code.backpatch($7->next_list, $2);
-	g_code.backpatch($7->continue_list, $2);
-	$$->next_list.push_back($6);
-	$$->next_list.merge($7->break_list);
+	g_code.get($7) = string(" beq ") + REGISTER[$4->rdest] + string(" $zero _\n");
+	g_code.backpatch($8->next_list, $2);
+	g_code.backpatch($8->continue_list, $2);
+	$$->next_list.push_back($7);
+	$$->next_list.merge($8->break_list);
 	g_code.add(string(" j ") + *$2 + string("\n"));
 	delete $2;
   }
@@ -1252,7 +1252,12 @@ statement: assign T_SEMICOLON
 	g_code.get($9) = string(" j ") + *$15 + string("\n");
 	g_code.get($13) = string(" j ") + *$5 + string("\n");
 	//g_code.backpatch($15->next_list, $5);
-	g_code.backpatch($16->next_list, $11);
+	if($16->roll_back_label != ""){
+		g_code.backpatch($16->next_list, &($16->roll_back_label));
+	}else{
+		g_code.backpatch($16->next_list, $11);
+	}
+	//TODO: Continue list???
 	$$->next_list.push_back($8);
 	$$->next_list.merge($16->break_list);
 	g_code.add(string(" j ") + *$11 + string("\n"));
