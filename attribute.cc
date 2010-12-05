@@ -52,7 +52,7 @@ public:
 
   int type;
 
-
+  int sp_diff;
   vector< pair<string, int> > arglist;
 
   int inherited; // non-zero means this attribute is inherited

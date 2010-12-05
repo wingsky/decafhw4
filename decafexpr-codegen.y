@@ -28,6 +28,7 @@
   long global_size = 0;
   long heap_offset = 0; 
   bool param_set = 0; 
+  list<int> sp_diff;
   
   string int_to_str(int);
 
@@ -229,6 +230,7 @@
           cerr << block_owner << "stack size " << sem.mtdtbl[block_owner]->stack_size << endl;
           offset = -(sem.mtdtbl[block_owner]->stack_size);
           sem.mtdtbl[block_owner]->stack_size += 4;
+          sp_diff.back() += 4;
           g_code.add(" sw " + string(REGISTER[expr->rdest]) + ", " + int_to_str(offset) + "($fp)  #spill to stack\n" );
           g_code.add(" addiu $sp, $sp, -4\n");
           d->rdest = -1;
@@ -804,11 +806,16 @@ begin_block: T_LCB
     else {
       param_set = 0;
     }
+    sp_diff.push_back(0);
   }
 
 end_block: T_RCB
   {
     sem.remove_symtbl();
+    if (sp_diff.back() != 0) {
+      g_code.add(" addiu $sp, $sp, " + int_to_str(+sp_diff.back()) + "  # roll back $sp\n");
+    }
+    sp_diff.pop_back();
   }
 
 field_decl_list: field_decl_list field_decl
