@@ -86,10 +86,7 @@ public:
 
   }
 
-  string calc_addr(long offset) {
-    string tmp_s = "";
-    return tmp_s;
-  }
+/*
   string spill_reg(int reg, long offset) {
     
     string tmp_s = "";
@@ -110,7 +107,7 @@ public:
     d->rdest = -1;
     regtbl[reg].clear();
   }
-
+*/
   typedef map<string, method_descriptor* > method_table;
   method_table mtdtbl; 
 
