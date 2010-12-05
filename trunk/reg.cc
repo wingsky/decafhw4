@@ -62,8 +62,10 @@ public:
         return i;
       }
     }
+    // Otherwise, we have to spill
+    return -1;
 
-    fprintf(stderr, "ERROR: Run out of $s registers!\n");
-    exit(1);
+    //fprintf(stderr, "ERROR: Run out of $s registers!\n");
+    //exit(1);
   }
 };

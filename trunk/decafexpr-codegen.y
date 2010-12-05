@@ -29,6 +29,7 @@
   long heap_offset = 0; 
   bool param_set = 0; 
   
+  string int_to_str(int);
 
   list<int> merge_list(list<int>& l, list<int>& r){
     list<int> new_list = l;
@@ -172,7 +173,9 @@
   attribute *assign(attribute *attr, attribute *expr) {
 
     descriptor *d = sem.access_symtbl(attr->lexeme);
+    int spill = 0;
     int reg;
+    int offset;
 
 	if(d->type != expr->type){
 		string err_msg = string("type mismatch between when assign value to variable '") + attr->lexeme + string("'\n");
@@ -182,7 +185,15 @@
     if (d != NULL) {
       if ((d->rdest == -1)) {
         reg = reg::get_empty_reg(attr->lexeme);
-        d->rdest = reg;
+        if (reg == -1) {
+          // Allocate a temp reg, and spill it to memory
+          //reg = reg::get_temp_reg(expr->rdest, expr->rdest);
+          d->rdest = -1;
+          spill = 1;
+        } else {
+          // Allocate a s reg
+          d->rdest = reg;
+        }
       } else {
         reg = d->rdest;
       }
@@ -200,7 +211,26 @@
     assign->add_child(*attr);
     assign->add_child(*expr);
     DEBUG(assign->print("assign"));
-    g_code.add(" move " + string(REGISTER[assign->rdest]) + ", " + string(REGISTER[expr->rdest]) + "\n");
+    if (spill == 0) {
+      g_code.add(" move " + string(REGISTER[assign->rdest]) + ", " + string(REGISTER[expr->rdest]) + "\n");
+    } 
+    // If spill, write reg to memory and decrement stack pointer
+    else if (spill == 1) {
+        int offset;
+        if (d->offset != 0) {
+          offset = d->offset;
+          g_code.add(" sw " + string(REGISTER[expr->rdest]) + ", " + int_to_str(offset) + "($fp)  #spill to stack\n" );
+        } else {
+          //cout << block_owner << "stack size " << sem.mtdtbl[block_owner]->stack_size << endl;
+          sem.mtdtbl[block_owner]->stack_size -= 4;
+          offset = -(sem.mtdtbl[block_owner]->stack_size);
+          g_code.add(" sw " + string(REGISTER[expr->rdest]) + ", " + int_to_str(offset) + "($fp)  #spill to stack\n" );
+          g_code.add(" addiu $sp, $sp, -4\n");
+          d->rdest = -1;
+          d->offset = offset;
+        }
+        
+    }
 
     if (attr->rdest != expr->rdest) {
       reg::free_temp_reg(expr->rdest);
@@ -317,14 +347,22 @@
         // If it is not in an register (global var or spilled local var)
   
       if ((d->rdest == -1)) {
-	    //cerr << "variable " << token->lexeme << " used before a value was assigned" << endl;
-	    //throw runtime_error("variable not in symbol table");
-	    d->rdest = reg::get_empty_reg(token->lexeme);
-	    reg = d->rdest;
-	    g_code.add(" lw " + string(REGISTER[d->rdest]) + ", " + d->memoryaddr + "\n");
-	  } else {
-	    reg = d->rdest;
-	  }
+        //cerr << "variable " << token->lexeme << " used before a value was assigned" << endl;
+        //throw runtime_error("variable not in symbol table");
+        if (d->global) {
+          // It is a global var
+          d->rdest = reg::get_temp_reg(-1, -1);
+          reg = d->rdest;
+          g_code.add(" lw " + string(REGISTER[d->rdest]) + ", " + d->memoryaddr + "\n");
+        } else {
+          // It is a spilled local var
+          reg = reg::get_temp_reg(-1, -1);
+          d->rdest = reg;
+          g_code.add(" lw " + string(REGISTER[reg]) + ", " + int_to_str(d->offset) + "($fp)  # load from stack\n");
+        }
+      } else {
+        reg = d->rdest;
+      }
 
       lvalue->opcode_type = "none";
       lvalue->rdest = reg;

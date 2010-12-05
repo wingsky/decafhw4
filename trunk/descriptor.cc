@@ -12,10 +12,12 @@ public:
   string memoryaddr;
   int global;
   int array_length;
+  int offset;
 
   descriptor(string t) {
 	name = t;
     //type = t;
+    offset = 0;
     rdest = -1;
     memoryaddr = "";
     global = 0;
@@ -24,10 +26,11 @@ public:
 
   descriptor(string n, int t, int r, string ma) {
     name = n;
-	type = t;
+	  type = t;
     rdest = r;
     memoryaddr = ma;
     global = 0;
+    offset = 0;
     array_length = 0;
   }
 
