@@ -54,7 +54,7 @@ public:
 
   int sp_diff;
   vector< pair<string, int> > arglist;
-
+  string roll_back_label;
   int inherited; // non-zero means this attribute is inherited
 
   // constructor sets up the various variables and the free register list

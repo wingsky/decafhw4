@@ -49,7 +49,7 @@ public:
 
 	void add(const string& c){
 		code_list.push_back(c);
-//		cout << c;
+		//cout << c;
 	}
 
   void insert(int pos, const string& c) {
