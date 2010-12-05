@@ -794,8 +794,13 @@ block: begin_block var_decl_list
   }
        statement_list end_block
   {
+    
     delete $2;
     $$ = $4;
+    if ($5 != NULL) {
+      $$->roll_back_label = $5->roll_back_label;
+      delete $5;
+    }
   }
 
 begin_block: T_LCB
@@ -811,10 +816,17 @@ begin_block: T_LCB
 
 end_block: T_RCB
   {
+    attribute *end_block = NULL;
     sem.remove_symtbl();
+    //cout << sp_diff.back() << endl;
     if (sp_diff.back() != 0) {
+      string *label = next_label();
       g_code.add(" addiu $sp, $sp, " + int_to_str(+sp_diff.back()) + "  # roll back $sp\n");
+      end_block = new attribute;
+      end_block->roll_back_label = *label;
+      delete label;
     }
+    $$ = end_block;
     sp_diff.pop_back();
   }
 
