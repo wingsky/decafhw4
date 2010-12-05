@@ -174,7 +174,7 @@
 
     descriptor *d = sem.access_symtbl(attr->lexeme);
     int spill = 0;
-    int reg;
+    int reg = -1;
     int offset;
 
 	if(d->type != expr->type){
@@ -184,12 +184,15 @@
 	}
     if (d != NULL) {
       if ((d->rdest == -1)) {
-        reg = reg::get_empty_reg(attr->lexeme);
+        if( d->offset == 0) {
+          reg = reg::get_empty_reg(attr->lexeme);
+        }
         if (reg == -1) {
           // Allocate a temp reg, and spill it to memory
           //reg = reg::get_temp_reg(expr->rdest, expr->rdest);
           d->rdest = -1;
           spill = 1;
+          //cout << "use spilled " << attr->lexeme << endl;
         } else {
           // Allocate a s reg
           d->rdest = reg;
@@ -357,7 +360,7 @@
         } else {
           // It is a spilled local var
           reg = reg::get_temp_reg(-1, -1);
-          d->rdest = reg;
+          //d->rdest = reg;
           g_code.add(" lw " + string(REGISTER[reg]) + ", " + int_to_str(d->offset) + "($fp)  # load from stack\n");
         }
       } else {
