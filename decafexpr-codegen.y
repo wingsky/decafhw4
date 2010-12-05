@@ -828,7 +828,7 @@ field_decl_list: field_decl_list field_decl
 
 field_decl: T_INT field int_field_comma_list T_SEMICOLON
     {
-      sem.enter_symtbl($2->lexeme, T_INT, -1, $2->lexeme);
+      sem.enter_symtbl($2->lexeme, T_INT, -1, $2->lexeme, lineno);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -845,7 +845,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
     }
      | T_BOOL field bool_field_comma_list T_SEMICOLON
     {
-      sem.enter_symtbl($2->lexeme, T_BOOL, -1, $2->lexeme);
+      sem.enter_symtbl($2->lexeme, T_BOOL, -1, $2->lexeme, lineno);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -860,7 +860,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
     }
      | T_INT T_ID T_ASSIGN constant T_SEMICOLON
     {
-      sem.enter_symtbl(*$2, T_INT, -1, *$2);
+      sem.enter_symtbl(*$2, T_INT, -1, *$2, lineno);
       sem.access_symtbl(*$2)->global = 1;
       // Address of the global variable is its name
       g_code.global_decl.push_back(".globl " + *$2 + "\n");
@@ -869,7 +869,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
     }
      | T_BOOL T_ID T_ASSIGN constant T_SEMICOLON
     {
-      sem.enter_symtbl(*$2, T_BOOL, -1, *$2);
+      sem.enter_symtbl(*$2, T_BOOL, -1, *$2, lineno);
       sem.access_symtbl(*$2)->global = 1;
       // Address of the global variable is its name
       g_code.global_decl.push_back(".globl " + *$2 + "\n");
@@ -880,7 +880,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
 
 int_field_comma_list: T_COMMA field int_field_comma_list
     {
-      sem.enter_symtbl($2->lexeme, T_INT, -1, $2->lexeme);
+      sem.enter_symtbl($2->lexeme, T_INT, -1, $2->lexeme, lineno);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -894,7 +894,7 @@ int_field_comma_list: T_COMMA field int_field_comma_list
 
 bool_field_comma_list: T_COMMA field bool_field_comma_list
     {
-      sem.enter_symtbl($2->lexeme, T_BOOL, -1, $2->lexeme);
+      sem.enter_symtbl($2->lexeme, T_BOOL, -1, $2->lexeme, lineno);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -953,7 +953,7 @@ method_decl: T_VOID T_ID
       vector< pair<string, int> >::iterator it;
       for (it = d->args.begin(); it != d->args.end(); it++) {
          // Put parameter name into symbol table
-         sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+         sem.enter_symtbl((*it).first, (*it).second, -1, "", lineno); 
          //  cout << "PARAM TYPE: " << (*it).first << " " << (*it).second << endl;
       }
 
@@ -993,7 +993,7 @@ method_decl: T_VOID T_ID
       vector< pair<string, int> >::iterator it;
       for (it = d->args.begin(); it != d->args.end(); it++) {
          // Put parameter name into symbol table
-        sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+        sem.enter_symtbl((*it).first, (*it).second, -1, "", lineno); 
        // cout << "PARAM TYPE: " << (*it).first << " " << (*it).second << endl;
       }
 
@@ -1033,7 +1033,7 @@ method_decl: T_VOID T_ID
       vector< pair<string, int> >::iterator it;
       for (it = d->args.begin(); it != d->args.end(); it++) {
          // Put parameter name into symbol table
-         sem.enter_symtbl((*it).first, (*it).second, -1, ""); 
+         sem.enter_symtbl((*it).first, (*it).second, -1, "", lineno); 
        // cout << "PARAM TYPE: " << (*it).first << " " << (*it).second << endl;
       }
 
@@ -1145,7 +1145,7 @@ statement_list: statement_list
 var_decl: T_INT T_ID int_id_comma_list T_SEMICOLON
   {
 	// TODO: NO TYPE CHEKCING!!!!!!!!!!!!!!!!!
-    sem.enter_symtbl(*$2, T_INT, -1, "");
+    sem.enter_symtbl(*$2, T_INT, -1, "", lineno);
     $$ = var_decl($2, $3);
     if (block_owner == "") {
       cout << "ERROR: empty block_owner\n";
@@ -1155,7 +1155,7 @@ var_decl: T_INT T_ID int_id_comma_list T_SEMICOLON
      | T_BOOL T_ID bool_id_comma_list T_SEMICOLON
   {
 	// TODO: NO TYEP CHECKING!!!!!!!!!!!!!!!!!
-    sem.enter_symtbl(*$2, T_BOOL, -1, "");
+    sem.enter_symtbl(*$2, T_BOOL, -1, "", lineno);
     $$ = var_decl($2, $3);
     if (block_owner == "") {
       cout << "ERROR: empty block_owner\n";
@@ -1169,7 +1169,7 @@ int_id_comma_list: /* empty */
   }
      | T_COMMA T_ID int_id_comma_list
   {
-    sem.enter_symtbl(*$2, T_INT, -1, "");
+    sem.enter_symtbl(*$2, T_INT, -1, "", lineno);
     $$ = var_decl($2, $3);
     sem.mtdtbl[block_owner]->var_count++;
   }
@@ -1181,7 +1181,7 @@ bool_id_comma_list: /* empty */
   }
      | T_COMMA T_ID bool_id_comma_list
   {
-    sem.enter_symtbl(*$2, T_BOOL, -1, "");
+    sem.enter_symtbl(*$2, T_BOOL, -1, "", lineno);
     $$ = var_decl($2, $3);
     sem.mtdtbl[block_owner]->var_count++;
   }
@@ -1228,19 +1228,23 @@ statement: assign T_SEMICOLON
 	g_code.add(string(" j ") + *$2 + string("\n"));
 	delete $2;
   }
-     | T_FOR T_LPAREN assign_comma_list T_SEMICOLON begin_expr expr end_expr jal T_SEMICOLON generate_label assign_comma_list jal T_RPAREN generate_label block
+     | T_FOR T_LPAREN assign_comma_list T_SEMICOLON begin_expr expr 
   {
-	$$ = for_stmt($3, $6, $11, $15);
+	reg::free_temp_reg($6->rdest);
+  }	   
+       end_expr jal T_SEMICOLON generate_label assign_comma_list jal T_RPAREN generate_label block
+  {
+	$$ = for_stmt($3, $6, $12, $16);
 
-	g_code.get($7) = string(" beq ") + REGISTER[$6->rdest] + string(" $zero _\n");
-	g_code.get($8) = string(" j ") + *$14 + string("\n");
-	g_code.get($12) = string(" j ") + *$5 + string("\n");
+	g_code.get($8) = string(" beq ") + REGISTER[$6->rdest] + string(" $zero _\n");
+	g_code.get($9) = string(" j ") + *$15 + string("\n");
+	g_code.get($13) = string(" j ") + *$5 + string("\n");
 	//g_code.backpatch($15->next_list, $5);
-	g_code.backpatch($15->next_list, $10);
-	$$->next_list.push_back($7);
-	$$->next_list.merge($15->break_list);
-	g_code.add(string(" j ") + *$10 + string("\n"));
-	delete $14, $5, $10;
+	g_code.backpatch($16->next_list, $11);
+	$$->next_list.push_back($8);
+	$$->next_list.merge($16->break_list);
+	g_code.add(string(" j ") + *$11 + string("\n"));
+	delete $15, $5, $11;
   }
      | T_RETURN opt_expr T_SEMICOLON
   {

@@ -41,7 +41,7 @@ public:
     symtbl.pop_front();
   }
 
-  void enter_symtbl(string ident, int type, int rdest, string memoryaddr) {
+  void enter_symtbl(string ident, int type, int rdest, string memoryaddr, int lineno) {
     symbol_table* tbl;
     symbol_table::iterator find_ident;
 
@@ -50,7 +50,7 @@ public:
 
     tbl = &symtbl.front();
     if ((find_ident = tbl->find(ident)) != tbl->end()) {
-      cerr << "Warning: redefining previously defined identifier: " << ident << endl;
+      cerr <<"Line: " << lineno << " Warning: redefining previously defined identifier: " << ident << endl;
       delete(find_ident->second);
       tbl->erase(ident);
     }

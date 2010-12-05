@@ -48,11 +48,8 @@ public:
 
 
 	void add(const string& c){
-		//cout << "ADD: "<< c;
 		code_list.push_back(c);
-		//print();
-		//cout << endl;
-    //cerr << c << endl;
+//		cout << c;
 	}
 
   void insert(int pos, const string& c) {
