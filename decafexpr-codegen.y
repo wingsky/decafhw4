@@ -226,8 +226,8 @@
           offset = d->offset;
           g_code.add(" sw " + string(REGISTER[expr->rdest]) + ", " + int_to_str(offset) + "($fp)  #spill to stack\n" );
         } else {
-          cerr << d->name << " spilling to stack " << endl;
-          cerr << block_owner << "stack size " << sem.mtdtbl[block_owner]->stack_size << endl;
+          //cerr << d->name << " spilling to stack " << endl;
+          //cerr << block_owner << "stack size " << sem.mtdtbl[block_owner]->stack_size << endl;
           offset = -(sem.mtdtbl[block_owner]->stack_size);
           sem.mtdtbl[block_owner]->stack_size += 4;
           sp_diff.back() += 4;
@@ -356,14 +356,14 @@
       if ((d->rdest == -1)) {
         //cerr << "variable " << token->lexeme << " used before a value was assigned" << endl;
         //throw runtime_error("variable not in symbol table");
-        cerr << "l expr " << d->name << " not in reg\n";
+        //cerr << "l expr " << d->name << " not in reg\n";
         if (d->global) {
           // It is a global var
           d->rdest = reg::get_temp_reg(-1, -1);
           reg = d->rdest;
           g_code.add(" lw " + string(REGISTER[d->rdest]) + ", " + d->memoryaddr + "\n");
         } else {
-          cerr << "get l expr from mem " << d->name << endl;
+          //cerr << "get l expr from mem " << d->name << endl;
           // It is a spilled local var
           reg = reg::get_temp_reg(-1, -1);
           //d->rdest = reg;
