@@ -222,7 +222,7 @@
     else if (spill == 1) {
         int offset;
         if (d->offset != 0) {
-          cout << d->name << " has offset " << offset << endl;
+          //cout << d->name << " has offset " << offset << endl;
           offset = d->offset;
           g_code.add(" sw " + string(REGISTER[expr->rdest]) + ", " + int_to_str(offset) + "($fp)  #spill to stack\n" );
         } else {
