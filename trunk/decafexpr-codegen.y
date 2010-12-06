@@ -769,6 +769,14 @@ start: program
 	//	g_code.backpatch($1->next_list, next_label());
 	//}	
 	delete $1;
+  
+  // Check if the program has a main() method
+  if (sem.mtdtbl["main"] == NULL) {
+    string err_msg = "no main() method in this program\n";
+    string err_type = "no main() method error";
+    err(err_msg, err_msg);
+
+  }
 
 	g_code.print();
 
@@ -1266,6 +1274,13 @@ statement: assign T_SEMICOLON
      | T_RETURN opt_expr T_SEMICOLON
   {
     if ($2->rdest != -1) {
+      // Check if method return type matches the expr being returned
+      if ($2->type != sem.mtdtbl[block_owner]->return_type) {
+         string err_msg = string("type mismatch between ") + block_owner + string(" and ") + int_to_str($2->type) + string("\n");
+         string err_type("type mismatch");
+
+         err(err_msg, err_type);
+      }
       g_code.add(" move $v0, " + string(REGISTER[$2->rdest]) + "  # move return value into $v0\n");
     }
       g_code.add(" j " + block_owner + "_return  #jump to callee_restore\n");
@@ -1406,6 +1421,7 @@ opt_expr: expr
     attribute *opt_expr = new attribute;
     opt_expr->mipsCode = " sw " + string(REGISTER[$1->rdest]) + ", " + int_to_str(tmp_pos) + "($fp)  #pass argument\n"; 
     opt_expr->rdest = $1->rdest;
+    opt_expr->type = $1->type;
     tmp_pos = tmp_pos - 4;
     reg::free_temp_reg($1->rdest);
     $$ = opt_expr;
