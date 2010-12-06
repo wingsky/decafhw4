@@ -14,7 +14,7 @@
 
   using namespace std;
 
-  const char* INTEGER_OP[] = {"+","-","*","/","<<",">>","rot","%","<",">","<=",">="};
+  const char* INTEGER_OP[] = {"+","-","*","/","<<",">>","rot","%","<",">","<=",">=", "rot"};
   const char* BOOL_OP[] = {"&&", "||", "!"};
   const char* BOOL_RETURN_OP[] = {"==", "!=", "<", ">", "<=", ">=", "&&", "||", "!"};
   set<const char*> integer_op_set(INTEGER_OP, INTEGER_OP + sizeof(INTEGER_OP)/sizeof(char*));
@@ -741,6 +741,8 @@ string callee_save(method_descriptor *d) {
 %type <sval> begin_expr
 %type <ival> end_expr
 
+%type <attr> if_expr
+
 %left T_OR
 %left T_AND
 %left T_EQ T_NEQ
@@ -1215,7 +1217,7 @@ statement: assign T_SEMICOLON
   {
     $$ = $1;
   }
-     | T_IF T_LPAREN expr T_RPAREN begin_if_stmt block end_if_stmt T_ELSE generate_label block
+     | T_IF T_LPAREN if_expr T_RPAREN begin_if_stmt block end_if_stmt T_ELSE generate_label block
   {
 	$$ = if_else($3, $6, $10);
 
@@ -1226,7 +1228,7 @@ statement: assign T_SEMICOLON
 	$$->continue_list = merge_list($6->continue_list, $10->continue_list);
 	delete $9;
   }
-     | T_IF T_LPAREN expr T_RPAREN begin_if_stmt block 
+     | T_IF T_LPAREN if_expr T_RPAREN begin_if_stmt block 
   {
     $$ = if_else($3, $6);
 
@@ -1259,13 +1261,12 @@ statement: assign T_SEMICOLON
 	g_code.get($8) = string(" beq ") + REGISTER[$6->rdest] + string(" $zero _\n");
 	g_code.get($9) = string(" j ") + *$15 + string("\n");
 	g_code.get($13) = string(" j ") + *$5 + string("\n");
-	//g_code.backpatch($15->next_list, $5);
+	$16->next_list.merge($16->continue_list);
 	if($16->roll_back_label != ""){
 		g_code.backpatch($16->next_list, &($16->roll_back_label));
 	}else{
 		g_code.backpatch($16->next_list, $11);
 	}
-	//TODO: Continue list???
 	$$->next_list.push_back($8);
 	$$->next_list.merge($16->break_list);
 	g_code.add(string(" j ") + *$11 + string("\n"));
@@ -1307,6 +1308,13 @@ statement: assign T_SEMICOLON
     $$ = $1;
   }
      ;
+
+if_expr: expr
+  {
+	$$ = $1;
+	reg::free_temp_reg($1->rdest);
+  }
+	;
 
 begin_expr: 
   {
@@ -1536,11 +1544,20 @@ expr: lvalue
     
     // this should include either a mod instruction or a branch,
     // removed the correct implementation here due to overlap with hw4
-    if ($3->opcode == "neg") {
-      $$ = binop_expr("ror", "rot", $1, $3); // rotate right if right expr is -1
-    } else {
-      $$ = binop_expr("ror", "rot", $1, $3); // else rotate left
-    }
+	//g_code.add(string(" bltz " + $3->rdest + string(", ") + *label + string("\n")));
+	int bltz_instr = next_instr("");
+	$$ = binop_expr("rol", "rot", $1, $3);
+	string* label = next_label();
+	g_code.get(bltz_instr) = string(" bltz ") + REGISTER[$3->rdest] + string(", ") + *label + string("\n");
+	//g_code.add(*label + string(":\n"));
+	attribute* tmp = unary_expr("neg", "-", $3);
+	$$ = binop_expr("ror", "rot", $1, tmp);
+	delete tmp, label;
+    //if ($3->opcode == "neg") {
+    //  $$ = binop_expr("ror", "rot", $1, $3); // rotate right if right expr is -1
+    //} else {
+    //  $$ = binop_expr("ror", "rot", $1, $3); // else rotate left
+    //}
   }
      | expr T_MOD expr
   {
