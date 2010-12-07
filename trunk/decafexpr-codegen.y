@@ -14,6 +14,14 @@
 
   using namespace std;
 
+  enum VAR_TYPE{
+	VOID = 0,
+	INT,
+	BOOL,
+	CHARCONSTANT,
+	TYPE_COUNT
+  };
+  const char* TYPE_NAME[TYPE_COUNT] = {"void", "int", "bool", "char constant"};
   const char* INTEGER_OP[] = {"+","-","*","/","<<",">>","rot","%","<",">","<=",">=", "rot"};
   const char* BOOL_OP[] = {"&&", "||", "!"};
   const char* BOOL_RETURN_OP[] = {"==", "!=", "<", ">", "<=", ">=", "&&", "||", "!"};
@@ -258,15 +266,20 @@
 		string err_type("callout function missing argument");
 		err(err_msg, err_type);
 	  }else if(attr->token == "stringconst"){
-		string err_msg = string("callout function ") + *callout_fn + string("'s second argument must be expression!'\n");
+		string err_msg = string("callout function ") + *callout_fn + string("'s second argument cannot be string constant!'\n");
 		string err_type("callout function wrong argument type");
 		err(err_msg, err_type);
 	  }
 
-	}
-    else if (*callout_fn == "\"read_int\"")
+	} else if (*callout_fn == "\"read_int\""){
       syscall_setup->imm = "5";
-    else if (*callout_fn == "\"print_string\""){
+	  if(attr != NULL){
+		string err_msg = string("callout \"read_int\" only accepts one argument\n");
+		string err_type = string("callout function wrong argument type");
+
+		err(err_msg, err_type);
+	  }
+	} else if (*callout_fn == "\"print_string\""){
       syscall_setup->imm = "4";
 	  if(attr == NULL){
 		string err_msg = string("callout function ") + *callout_fn + string(" should have a second argument!\n");
@@ -318,6 +331,7 @@
     syscall->opcode = "syscall";
 	if(*callout_fn == "\"read_int\""){
 		syscall->rdest = V0;
+		syscall->type = INT;
 	}
     syscall->add_child(*syscall_setup);
     if(callout != NULL){
@@ -408,7 +422,7 @@ attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, 
 		}
 	}
 	if(integer_op_set.find(op) != integer_op_set.end()){
-		if(left_expr->type != T_INT || right_expr->type != T_INT){
+		if(left_expr->type != INT || right_expr->type != INT){
 			string err_msg = string("operator ") + op + string(" only accepts int type\n");
 			string err_type("operator type error");
 
@@ -416,7 +430,7 @@ attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, 
 		}
 	}
 	if(bool_op_set.find(op) != bool_op_set.end()){
-		if(left_expr->type != T_BOOL || right_expr->type != T_BOOL){
+		if(left_expr->type != BOOL || right_expr->type != BOOL){
 			string err_msg = string("operator ") + op + string(" only accepts bool type\n");
 			string err_type("operator type error");
 
@@ -427,9 +441,9 @@ attribute *binop_expr(const char *opcode, const char* op, attribute *left_expr, 
 	attribute *expr = new attribute;
 
 	if(bool_return_op_set.find(op) != bool_return_op_set.end()){
-		expr->type = T_BOOL;
+		expr->type = BOOL;
 	} else{
-		expr->type = T_INT;
+		expr->type = INT;
 	}
 	//cout << "result type: " << expr->type << endl;
     expr->opcode_type = "reuse";
@@ -482,7 +496,7 @@ attribute *unary_expr(const char *opcode, const char* op, attribute *attr) {
       attr->result_register(attr_reg);
     }
 */
-	if(attr->type != T_INT){
+	if(attr->type != INT){
 		string err_msg = "operator " + string(op) + " only accepts int type\n";
 		string err_type = "operator type error";
 
@@ -585,7 +599,7 @@ string callee_save(method_descriptor *d) {
     
     string tmp_s = "";
     // Put return value in $v0
-    if (d->return_type != T_VOID) {
+    if (d->return_type != VOID) {
       
     }
     // Restore callee-saved registers
@@ -850,7 +864,7 @@ field_decl_list: field_decl_list field_decl
 
 field_decl: T_INT field int_field_comma_list T_SEMICOLON
     {
-      sem.enter_symtbl($2->lexeme, T_INT, -1, $2->lexeme, lineno);
+      sem.enter_symtbl($2->lexeme, INT, -1, $2->lexeme, lineno);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -867,7 +881,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
     }
      | T_BOOL field bool_field_comma_list T_SEMICOLON
     {
-      sem.enter_symtbl($2->lexeme, T_BOOL, -1, $2->lexeme, lineno);
+      sem.enter_symtbl($2->lexeme, BOOL, -1, $2->lexeme, lineno);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -882,7 +896,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
     }
      | T_INT T_ID T_ASSIGN constant T_SEMICOLON
     {
-      sem.enter_symtbl(*$2, T_INT, -1, *$2, lineno);
+      sem.enter_symtbl(*$2, INT, -1, *$2, lineno);
       sem.access_symtbl(*$2)->global = 1;
       // Address of the global variable is its name
       g_code.global_decl.push_back(".globl " + *$2 + "\n");
@@ -891,7 +905,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
     }
      | T_BOOL T_ID T_ASSIGN constant T_SEMICOLON
     {
-      sem.enter_symtbl(*$2, T_BOOL, -1, *$2, lineno);
+      sem.enter_symtbl(*$2, BOOL, -1, *$2, lineno);
       sem.access_symtbl(*$2)->global = 1;
       // Address of the global variable is its name
       g_code.global_decl.push_back(".globl " + *$2 + "\n");
@@ -902,7 +916,7 @@ field_decl: T_INT field int_field_comma_list T_SEMICOLON
 
 int_field_comma_list: T_COMMA field int_field_comma_list
     {
-      sem.enter_symtbl($2->lexeme, T_INT, -1, $2->lexeme, lineno);
+      sem.enter_symtbl($2->lexeme, INT, -1, $2->lexeme, lineno);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -916,7 +930,7 @@ int_field_comma_list: T_COMMA field int_field_comma_list
 
 bool_field_comma_list: T_COMMA field bool_field_comma_list
     {
-      sem.enter_symtbl($2->lexeme, T_BOOL, -1, $2->lexeme, lineno);
+      sem.enter_symtbl($2->lexeme, BOOL, -1, $2->lexeme, lineno);
       sem.access_symtbl($2->lexeme)->global = 1;
       // Address of the global variable is its name
       //$$ = field_decl($2->lexeme, $3);
@@ -962,7 +976,7 @@ method_decl: T_VOID T_ID
     }
       T_LPAREN param_list T_RPAREN 
     {  
-      sem.enter_method(*$2, T_VOID, $5->arglist);
+      sem.enter_method(*$2, VOID, $5->arglist);
       delete $5;
       block_owner = *$2;
       tmp_pos = g_code.get_next_instr();
@@ -1002,7 +1016,7 @@ method_decl: T_VOID T_ID
     }
       T_LPAREN param_list T_RPAREN 
     {  
-      sem.enter_method(*$2, T_INT, $5->arglist);
+      sem.enter_method(*$2, INT, $5->arglist);
       delete $5;
       block_owner = *$2;
       tmp_pos = g_code.get_next_instr();
@@ -1042,7 +1056,7 @@ method_decl: T_VOID T_ID
     }
       T_LPAREN param_list T_RPAREN 
     {
-      sem.enter_method(*$2, T_BOOL, $5->arglist);
+      sem.enter_method(*$2, BOOL, $5->arglist);
       delete $5;
       block_owner = *$2;
       tmp_pos = g_code.get_next_instr();
@@ -1117,7 +1131,7 @@ param_comma_list: param T_COMMA param_comma_list
 param: T_INT T_ID
   {
     attribute *param = new attribute;
-    param->type = T_INT;
+    param->type = INT;
     param->lexeme = *$2;
     $$ = param;
     
@@ -1125,7 +1139,7 @@ param: T_INT T_ID
      | T_BOOL T_ID
   {
     attribute *param = new attribute;
-    param->type = T_BOOL;
+    param->type = BOOL;
     param->lexeme = *$2;
     $$ = param;
   }
@@ -1167,7 +1181,7 @@ statement_list: statement_list
 var_decl: T_INT T_ID int_id_comma_list T_SEMICOLON
   {
 	// TODO: NO TYPE CHEKCING!!!!!!!!!!!!!!!!!
-    sem.enter_symtbl(*$2, T_INT, -1, "", lineno);
+    sem.enter_symtbl(*$2, INT, -1, "", lineno);
     $$ = var_decl($2, $3);
     if (block_owner == "") {
       cout << "ERROR: empty block_owner\n";
@@ -1177,7 +1191,7 @@ var_decl: T_INT T_ID int_id_comma_list T_SEMICOLON
      | T_BOOL T_ID bool_id_comma_list T_SEMICOLON
   {
 	// TODO: NO TYEP CHECKING!!!!!!!!!!!!!!!!!
-    sem.enter_symtbl(*$2, T_BOOL, -1, "", lineno);
+    sem.enter_symtbl(*$2, BOOL, -1, "", lineno);
     $$ = var_decl($2, $3);
     if (block_owner == "") {
       cout << "ERROR: empty block_owner\n";
@@ -1191,7 +1205,7 @@ int_id_comma_list: /* empty */
   }
      | T_COMMA T_ID int_id_comma_list
   {
-    sem.enter_symtbl(*$2, T_INT, -1, "", lineno);
+    sem.enter_symtbl(*$2, INT, -1, "", lineno);
     $$ = var_decl($2, $3);
     sem.mtdtbl[block_owner]->var_count++;
   }
@@ -1203,7 +1217,7 @@ bool_id_comma_list: /* empty */
   }
      | T_COMMA T_ID bool_id_comma_list
   {
-    sem.enter_symtbl(*$2, T_BOOL, -1, "", lineno);
+    sem.enter_symtbl(*$2, BOOL, -1, "", lineno);
     $$ = var_decl($2, $3);
     sem.mtdtbl[block_owner]->var_count++;
   }
@@ -1277,8 +1291,8 @@ statement: assign T_SEMICOLON
     if ($2->rdest != -1) {
       // Check if method return type matches the expr being returned
       if ($2->type != sem.mtdtbl[block_owner]->return_type) {
-         string err_msg = string("type mismatch between ") + block_owner + string(" and ") + int_to_str($2->type) + string("\n");
-         string err_type("type mismatch");
+         string err_msg = string("method ") + block_owner + string(" requires return type ") + TYPE_NAME[sem.mtdtbl[block_owner]->return_type] + string("\n");
+         string err_type("return type error");
 
          err(err_msg, err_type);
       }
@@ -1617,14 +1631,14 @@ constant: T_INTCONSTANT
   {
     attribute *constant = new attribute;
     constant->lexeme = *$1;
-	constant->type = T_INT;
+	constant->type = INT;
     $$ = constant;
   }
      | T_CHARCONSTANT
   {
 	attribute *constant = new attribute;
     constant->lexeme = *$1;
-	constant->type = T_CHARCONSTANT;
+	constant->type = INT;
     $$ = constant;
 
 //    $$ = constant($1, T_CHARCONSTANT);
@@ -1633,7 +1647,7 @@ constant: T_INTCONSTANT
   {
 	attribute *constant = new attribute;
     constant->lexeme = string("1");
-	constant->type = T_BOOL;
+	constant->type = BOOL;
     $$ = constant;
 
 
@@ -1644,7 +1658,7 @@ constant: T_INTCONSTANT
   {
 	attribute *constant = new attribute;
     constant->lexeme = string("0");
-	constant->type = T_BOOL;
+	constant->type = BOOL;
     $$ = constant;
 
 

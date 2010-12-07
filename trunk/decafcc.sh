@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 if [ ! -f decafexpr-codegen ]
 then
@@ -9,5 +9,6 @@ fi
 if [ $? == 0 ]
 then
 	spim -file tmp.m
-	rm -f tmp.m
 fi
+
+rm -f tmp.m
