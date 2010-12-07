@@ -13,10 +13,23 @@
   int lineno = 1;
   int tokenpos = 1;
  
-  
+ extern string int_to_str(int i);
+
   string *preterm(const char* token, const char* lexeme) {
-    string *preterm = new string(lexeme);
-    return preterm;
+    string *preterm = NULL;
+	if(strcmp(token, "T_CHARCONSTANT") == 0){
+		string lex = string(lexeme);
+		int c;
+		if(lex.size() <= 3)
+			c = lex[1];
+		else
+			c = lex[2];
+
+		preterm = new string(int_to_str(c));
+	}else {
+		preterm = new string(lexeme);
+	}
+	return preterm;
   }
 
   string remove_newlines (string s) {
