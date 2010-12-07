@@ -821,8 +821,10 @@ block: begin_block var_decl_list
     
     delete $2;
     $$ = $4;
+    $$->sp_diff = 0;
     if ($5 != NULL) {
       $$->roll_back_label = $5->roll_back_label;
+      $$->sp_diff = $5->sp_diff;
       delete $5;
     }
   }
@@ -846,8 +848,11 @@ end_block: T_RCB
     if (sp_diff.back() != 0) {
       string *label = next_label();
       g_code.add(" addiu $sp, $sp, " + int_to_str(+sp_diff.back()) + "  # roll back $sp\n");
+      cout << "roll back\n";
+      cout << "current stack size " << sem.mtdtbl[block_owner]->stack_size << endl; 
       end_block = new attribute;
       end_block->roll_back_label = *label;
+      end_block->sp_diff = sp_diff.back();
       delete label;
     }
     $$ = end_block;
