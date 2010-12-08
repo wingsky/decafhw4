@@ -618,9 +618,9 @@ string callee_save(method_descriptor *d) {
     d->lo_ptr += 4;
     d->saved_regs.clear();
 
+    tmp_s+= " addiu $sp, $fp, 4\n";
     tmp_s+= " lw $ra, 0($fp)\n";
     tmp_s+= " lw $fp, -4($fp)\n";
-    tmp_s+= " addiu $sp, $sp, " + int_to_str(d->stack_size) + "\n";
     tmp_s+= " jr $ra\n";
 
     return tmp_s;
