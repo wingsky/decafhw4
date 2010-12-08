@@ -21,7 +21,7 @@ $(targets): %: %.y
 $(cpptargets): %: %.y
 	@echo "compiling cpp yacc file:" $<
 	@echo "output file:" $@
-	bison -v -b $@ -d $<
+	bison -b $@ -d $<
 	$(mv) $@.tab.c $@.tab.cc
 	flex -o$@.lex.cc $@.lex
 	g++ -o $(bindir)/$@ $@.tab.cc $@.lex.cc -l$(yacclib) -l$(lexlib)
