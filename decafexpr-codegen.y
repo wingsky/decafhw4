@@ -175,7 +175,7 @@
 	attribute *if_else = new attribute;
 	if_else->token = string("if_else");
 	if_else->opcode_type = "none";
-	if_else->sp_diff = block1->sp_diff > block2->sp_diff ? block1->sp_diff : block2->sp_diff;
+	if_else->sp_diff =  block1->sp_diff + block2->sp_diff;
 	if_else->add_child(*expr);
 	if_else->add_child(*block1);
 	if_else->add_child(*block2);
