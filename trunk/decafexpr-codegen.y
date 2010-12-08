@@ -77,6 +77,7 @@
       parent->token = attr->token;
       parent->lexeme = attr->lexeme;
       parent->opcode_type = "none";
+	  parent->sp_diff = attr->sp_diff + attrlist->sp_diff;
       parent->add_child(*attr);
       parent->add_child(*attrlist);
 	  //parent->next_list = merge_list(attr->next_list, attrlist->next_list);
@@ -136,6 +137,7 @@
 	attribute *while_stmt= new attribute;
 	while_stmt->token = string("while");
 	while_stmt->opcode_type = "none";
+	while_stmt->sp_diff = block->sp_diff;
 	while_stmt->add_child(*expr);
 	while_stmt->add_child(*block);
 
@@ -147,6 +149,7 @@
     attribute* for_stmt = new attribute;
 	for_stmt->token = string("for");
 	for_stmt->opcode_type = "none";
+	for_stmt->sp_diff += block->sp_diff;
 	for_stmt->add_child(*assign_comma_list1);
 	for_stmt->add_child(*expr);
 	for_stmt->add_child(*assign_comma_list2);
@@ -160,6 +163,7 @@
 	attribute *if_else = new attribute;
 	if_else->token = string("if");
 	if_else->opcode_type = "none";
+	if_else->sp_diff = block->sp_diff;
 	if_else->add_child(*expr);
 	if_else->add_child(*block);
   
@@ -171,6 +175,7 @@
 	attribute *if_else = new attribute;
 	if_else->token = string("if_else");
 	if_else->opcode_type = "none";
+	if_else->sp_diff = block1->sp_diff > block2->sp_diff ? block1->sp_diff : block2->sp_diff;
 	if_else->add_child(*expr);
 	if_else->add_child(*block1);
 	if_else->add_child(*block2);
@@ -821,10 +826,10 @@ block: begin_block var_decl_list
     
     delete $2;
     $$ = $4;
-    $$->sp_diff = 0;
+    //$$->sp_diff = 0;
     if ($5 != NULL) {
       $$->roll_back_label = $5->roll_back_label;
-      $$->sp_diff = $5->sp_diff;
+      $$->sp_diff +=  $5->sp_diff;
       delete $5;
     }
   }
@@ -848,8 +853,8 @@ end_block: T_RCB
     if (sp_diff.back() != 0) {
       string *label = next_label();
       g_code.add(" addiu $sp, $sp, " + int_to_str(+sp_diff.back()) + "  # roll back $sp\n");
-      cout << "roll back\n";
-      cout << "current stack size " << sem.mtdtbl[block_owner]->stack_size << endl; 
+      //cout << "roll back\n";
+      //cout << "current stack size " << sem.mtdtbl[block_owner]->stack_size << endl; 
       end_block = new attribute;
       end_block->roll_back_label = *label;
       end_block->sp_diff = sp_diff.back();
@@ -1167,12 +1172,15 @@ statement_list: statement_list
 	  string* label = next_label();
 	  g_code.backpatch($1->next_list, label);
 	  delete label;
+	  if($1->sp_diff != 0){
+	    g_code.add(string(" addiu ") + string(" $sp, $sp, ") + int_to_str(-($1->sp_diff)) + string(" #unroll $sp\n"));			
+		$1->sp_diff = 0;
+	  }
 	}
   }		
 	   statement
   {
     $$ = combine($3, $1);
-	
 	$$->break_list = merge_list($1->break_list, $3->break_list);
 	$$->continue_list = merge_list($1->continue_list, $3->continue_list);
 	$$->next_list = $3->next_list;
@@ -1262,8 +1270,13 @@ statement: assign T_SEMICOLON
 	$$ = while_stmt($4, $8);
 
 	g_code.get($7) = string(" beq ") + REGISTER[$4->rdest] + string(" $zero _\n");
-	g_code.backpatch($8->next_list, $2);
-	g_code.backpatch($8->continue_list, $2);
+	if($8->roll_back_label != ""){
+		g_code.backpatch($8->next_list, &($8->roll_back_label));
+		g_code.backpatch($8->continue_list, &($8->roll_back_label));
+	} else{
+		g_code.backpatch($8->next_list, $2);
+		g_code.backpatch($8->continue_list, $2);
+	}
 	$$->next_list.push_back($7);
 	$$->next_list.merge($8->break_list);
 	g_code.add(string(" j ") + *$2 + string("\n"));
@@ -1276,7 +1289,7 @@ statement: assign T_SEMICOLON
        end_expr jal T_SEMICOLON generate_label assign_comma_list jal T_RPAREN generate_label block
   {
 	$$ = for_stmt($3, $6, $12, $16);
-
+	
 	g_code.get($8) = string(" beq ") + REGISTER[$6->rdest] + string(" $zero _\n");
 	g_code.get($9) = string(" j ") + *$15 + string("\n");
 	g_code.get($13) = string(" j ") + *$5 + string("\n");

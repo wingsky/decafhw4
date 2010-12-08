@@ -79,6 +79,7 @@ public:
 
     inherited = 0;
 	type = -1;
+	sp_diff = 0;
   }
 /*
   void init_free_registers() {
